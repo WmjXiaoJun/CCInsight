@@ -696,7 +696,7 @@ export const HelpPanel = ({ isOpen, onClose, nodeCount, edgeCount }: HelpPanelPr
             ccinsight — 开源代码库图谱浏览器
           </span>
           <a
-            href="https://github.com/abhigyanpatwari/ccinsight"
+            href="https://github.com/WmjXiaoJun/CCInsight"
             target="_blank"
             rel="noopener noreferrer"
             style={{ fontSize: 11, color: '#a78bfa', textDecoration: 'none' }}
