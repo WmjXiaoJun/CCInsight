@@ -1,23 +1,23 @@
 {
   "name": "ccinsight-core",
   "version": "0.1.0",
-  "description": "CCInsight core - Backend indexing service for Claude Code source code analysis platform",
+  "description": "CCInsight core - Interactive source code visualization & annotation backend",
   "author": "",
   "license": "MIT",
-  "homepage": "https://github.com/CCInsight/CCInsight#readme",
+  "homepage": "https://github.com/WmjXiaoJun/CCInsight#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/CCInsight/CCInsight.git",
+    "url": "git+https://github.com/WmjXiaoJun/CCInsight.git",
     "directory": "backend"
   },
   "bugs": {
-    "url": "https://github.com/CCInsight/CCInsight/issues"
+    "url": "https://github.com/WmjXiaoJun/CCInsight/issues"
   },
   "keywords": [
-    "claude-code",
+    "ccinsight",
     "code-analysis",
-    "chinese",
-    "ccinsight"
+    "visualization",
+    "annotations"
   ],
   "type": "module",
   "bin": {

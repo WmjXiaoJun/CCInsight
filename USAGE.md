@@ -2,7 +2,7 @@
 
 <div align="center">
 
-**CCInsight** — Claude Code 源码中文注解与可视化分析平台
+**CCInsight** — 源码可视化注解与交互式图谱工具
 
 [![版本](https://img.shields.io/badge/版本-v0.1.0-blue)](./PRODUCT.md)
 [![License](https://img.shields.io/badge/License-MIT-yellow)](./LICENSE)
@@ -41,7 +41,7 @@
 
 ```bash
 # 克隆仓库
-git clone https://github.com/CCInsight/CCInsight.git
+git clone https://github.com/WmjXiaoJun/CCInsight.git
 cd CCInsight
 
 # 安装依赖（推荐使用 pnpm，monorepo workspaces 自动处理）
@@ -90,29 +90,23 @@ http://localhost:5173?server=http://localhost:4747
 
 ### 访问地址
 
-| 服务    | 地址                  |
-|--------|---------------------|
-| 前端    | http://localhost:5173 |
+| 服务     | 地址                  |
+|---------|---------------------|
+| 前端     | http://localhost:5173 |
 | 后端 API | http://localhost:4747 |
 
 ---
 
 ## 加载仓库
 
-### 步骤 1：克隆 Claude Code 源码
-
-```bash
-git clone https://github.com/anthropics/claude-code.git
-```
-
-### 步骤 2：在 CCInsight 中加载
+### 步骤 1：在 CCInsight 中加载
 
 1. 打开前端界面（http://localhost:5173）
 2. 点击顶部导航栏的「分析新仓库」按钮
-3. 选择克隆下来的仓库路径
+3. 选择目标代码仓库路径
 4. 等待索引完成
 
-### 步骤 3：等待索引
+### 步骤 2：等待索引
 
 索引过程包括：
 
@@ -132,12 +126,12 @@ git clone https://github.com/anthropics/claude-code.git
 
 ### 顶部导航栏
 
-| 按钮              | 功能                        |
-|-----------------|---------------------------|
-| 分析新仓库          | 加载新的代码仓库                  |
-| 搜索框            | 全文搜索 / 图数据库查询             |
-| AI 设置           | 配置 LLM 提供商                  |
-| 视图切换           | 切换图谱视图 / 文件树视图            |
+| 按钮       | 功能                    |
+|-----------|-----------------------|
+| 分析新仓库    | 加载新的代码仓库              |
+| 搜索框      | 全文搜索 / 图数据库查询         |
+| AI 设置     | 配置 LLM 提供商             |
+| 视图切换     | 切换图谱视图 / 文件树视图        |
 
 ### 知识图谱视图
 
@@ -178,7 +172,7 @@ git clone https://github.com/anthropics/claude-code.git
 | Google Gemini | API Key              | Gemini 1.5 / 2.0 系列       |
 | Anthropic    | API Key              | Claude 3.5 / 3.7 系列        |
 | Azure OpenAI | API Key, Endpoint, Deployment | 企业级部署                |
-| Ollama       | Base URL             | 本地模型（默认 http://localhost:11434） |
+| Ollama       | Base URL             | 本地模型（默认 localhost:11434） |
 | LM Studio    | Base URL             | 本地模型                     |
 | Groq         | API Key              | 免费额度高，推荐尝鲜             |
 | DeepSeek     | API Key              | 性价比高                    |
@@ -244,19 +238,19 @@ ccinsight wiki <output-dir> --full
 {
   "path": "src/query.ts",
   "tier": 1,
-  "description": "Agent 主循环...",
+  "description": "核心逻辑说明...",
   "annotations": [
     {
       "lines": "1-30",
       "type": "import",
-      "zh": "【导入 — Anthropic SDK 类型】...",
+      "zh": "【导入 — SDK 类型定义】...",
       "en": "Original English comment..."
     },
     {
       "lines": "151-170",
       "type": "section",
-      "zh": "【Thinking 块规则】...",
-      "code": "const extendedThinking = ..."
+      "zh": "【核心逻辑块说明】...",
+      "code": "const someFunction = ..."
     }
   ]
 }
@@ -264,8 +258,8 @@ ccinsight wiki <output-dir> --full
 
 ### 注解类型
 
-| 类型       | 说明         |
-|----------|------------|
+| 类型        | 说明         |
+|-----------|------------|
 | `section` | 段落/章节说明    |
 | `function` | 函数解释       |
 | `class`   | 类解释        |
@@ -360,7 +354,7 @@ pnpm run build --workspace=backend
 2. 检查 API Key 是否有效
 3. 确认网络连接正常
 
-### Q: 如何更新源码索引？
+### Q: 如何更新仓库索引？
 
 在已加载的仓库中，点击「重新分析」按钮即可。
 

@@ -5,8 +5,8 @@ This file guides AI agents working on the CCInsight project.
 ## Project Name & Identity
 
 - **Project Name**: CCInsight (Claude Code Insight)
-- **Repository URL**: https://github.com/CCInsight/CCInsight
-- **Description**: Chinese source code annotation & visualization analysis platform for `claude-code-source-code`
+- **Repository URL**: https://github.com/WmjXiaoJun/CCInsight
+- **Description**: Interactive source code visualization & bilingual annotation tool for any codebase
 - **Language**: Chinese-first (UI, docs, annotations), English comments in code
 - **License**: MIT
 
@@ -67,7 +67,7 @@ Always build in this order:
 ### Tier System
 
 Files are organized by importance (Tier 1 = most critical):
-- **Tier 1 (核心层)**: Agent loop, tool interface, task state machine — 10 files, cover 80% of concepts
+- **Tier 1 (核心层)**: Core loop, tool interface, task state machine — 10 files, cover 80% of concepts
 - **Tier 2 (通信层)**: API client, server, context management
 - **Tier 3 (命令层)**: Slash commands, REPL interaction
 - **Tier 4 (工具层)**: File system, search, network tools

@@ -2,7 +2,7 @@
   "name": "ccinsight-web",
   "private": true,
   "version": "0.1.0",
-  "description": "CCInsight frontend - Claude Code source code Chinese visualization analysis platform",
+  "description": "CCInsight frontend - Interactive source code visualization & bilingual annotation tool",
   "engines": {
     "node": ">=20.0.0"
   },

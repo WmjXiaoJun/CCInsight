@@ -1,8 +1,8 @@
 # CCInsight
 
-**CCInsight** (Claude Code Insight) — Chinese Source Code Annotation & Visualization Analysis Platform
+**CCInsight** — Interactive Source Code Visualization & Bilingual Annotation Tool
 
-Built on top of [GitNexus](https://github.com/CCInsight/gitnexus), designed specifically for deep understanding of the `claude-code-source-code` repository. Core goal: **Understand Claude Code's architecture in Chinese, with bilingual annotations accessible to both Chinese and English developers**.
+Built on top of [GitNexus](https://github.com/CCInsight/gitnexus). Core capability: **Parse and index any code repository, visualize its structure through interactive knowledge graphs, overlay bilingual annotations on source code, and leverage AI assistance to help developers efficiently understand complex codebases**.
 
 [简体中文](./README.md) | English
 
@@ -12,17 +12,18 @@ Built on top of [GitNexus](https://github.com/CCInsight/gitnexus), designed spec
 
 ### Core Features
 
-- **Bilingual Code Annotation System** — Overlay Chinese explanations on source code without modifying the original, supports English/Chinese toggle
-- **Interactive Knowledge Graph** — Sigma.js visualization graph, click nodes to jump directly to source code and annotations
+- **Interactive Knowledge Graph** — Sigma.js WebGL rendering, smooth interaction with tens of thousands of nodes, click nodes to jump directly to source code
+- **Bilingual Source Code Annotation System** — Overlay Chinese explanations on source code without modifying the original, supports English/Chinese toggle
 - **Tier-based Navigation** — Layered by importance (Core → Communication → Command → Tool layers), prioritize the most critical code
-- **Smart Code Search** — Cypher graph database queries + full-text search, supports searching Chinese annotation content
-- **AI-assisted Interpretation** — Integrate with OpenAI/Gemini/Ollama LLMs, select code blocks for AI to auto-generate Chinese explanations
+- **Smart Code Search** — BM25 full-text search + graph database queries, supports searching Chinese annotation content
+- **AI-assisted Interpretation** — Integrate with OpenAI/Gemini/Ollama LLMs, select code blocks for AI to auto-generate explanations
 
 ### Technical Highlights
 
 - **Annotation Layer Separation** — Source code remains untouched, annotations stored in independent JSON files for independent maintenance and version control
 - **Tier Priority Strategy** — 20 core files cover 80% of core concepts, quickly master the overall architecture
-- **Automatic Backend Integration** — Auto-detect and connect to GitNexus backend on project startup, one-click graph loading
+- **Multi-language Parsing** — Tree-sitter supports incremental syntax parsing for 20+ programming languages
+- **Automatic Backend Integration** — Auto-detect and connect to backend on project startup, one-click graph loading
 
 ---
 
@@ -31,22 +32,22 @@ Built on top of [GitNexus](https://github.com/CCInsight/gitnexus), designed spec
 ### Prerequisites
 
 - Node.js >= 20.0.0
-- npm >= 9.0.0
+- pnpm >= 9.0.0
 
 ### Install
 
 ```bash
-git clone https://github.com/CCInsight/CCInsight.git
+git clone https://github.com/WmjXiaoJun/CCInsight.git
 cd CCInsight
-npm install
-npm run build
+pnpm install
+pnpm run build
 ```
 
 ### Run
 
 ```bash
-npm run dev          # Frontend (http://localhost:5173)
-npm run dev:backend  # Backend (http://localhost:4747)
+pnpm run dev          # Frontend (http://localhost:5173)
+pnpm run dev:backend  # Backend (http://localhost:4747)
 ```
 
 ---

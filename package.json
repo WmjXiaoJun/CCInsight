@@ -2,7 +2,7 @@
   "name": "ccinsight",
   "version": "0.1.0",
   "private": true,
-  "description": "Claude Code source code Chinese visualization analysis platform",
+  "description": "Interactive source code visualization & bilingual annotation tool",
   "workspaces": [
     "frontend",
     "backend",
@@ -18,10 +18,10 @@
     "setup": "node scripts/dev.mjs"
   },
   "keywords": [
-    "claude-code",
     "code-analysis",
     "visualization",
-    "chinese"
+    "annotations",
+    "knowledge-graph"
   ],
   "author": "",
   "license": "MIT",

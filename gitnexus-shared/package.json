@@ -2,7 +2,7 @@
   "name": "ccinsight-shared",
   "version": "0.1.0",
   "private": true,
-  "description": "CCInsight shared type definitions for Claude Code analysis platform",
+  "description": "CCInsight shared type definitions for source code visualization",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
