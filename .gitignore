@@ -47,6 +47,8 @@ annotations/local/
 tmp/
 temp/
 .tmp/
+*.ps1
+*.py.bak
 
 # Playwright
 test-results/
