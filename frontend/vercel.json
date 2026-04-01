@@ -1,0 +1,3 @@
+{
+  "installCommand": "cd ../ccinsight-shared && npm install && npm run build && cd ../ccinsight-web && npm install"
+}

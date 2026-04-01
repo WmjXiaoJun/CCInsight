@@ -1,0 +1,56 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+dist/
+build/
+*.tsbuildinfo
+
+# Environment
+.env
+.env.local
+.env.*.local
+*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Test
+coverage/
+*.lcov
+
+# CCInsight specific
+.ccinsight/
+*.db
+*.db-journal
+
+# Annotations (local overrides, committed ones go in annotations/)
+annotations/local/
+
+# Temporary
+tmp/
+temp/
+.tmp/
+
+# Playwright
+test-results/
+playwright-report/
+
+# Vercel
+.vercel/
