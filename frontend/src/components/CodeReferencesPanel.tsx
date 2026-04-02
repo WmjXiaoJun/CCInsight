@@ -175,19 +175,72 @@ export const CodeReferencesPanel = ({ onFocusNode }: CodeReferencesPanelProps) =
     };
   }, [codeReferenceFocus?.ts, aiReferences]);
 
+  // Content cache for AI citation cards: ref.id → fetched snippet
+  const [citationContent, setCitationContent] = useState<
+    Record<string, { content: string | null; start: number; end: number; error?: string }>
+  >({});
+  const citationAbortRef = useRef<Map<string, AbortController>>(new Map());
+
   const refsWithSnippets = useMemo(() => {
-    return aiReferences.map((ref) => {
-      return {
-        ref,
-        content: null as string | null,
-        start: 0,
-        end: 0,
-        highlightStart: 0,
-        highlightEnd: 0,
-        totalLines: 0,
-      };
-    });
-  }, [aiReferences]);
+    return aiReferences.map((ref) => ({
+      ref,
+      ...(citationContent[ref.id] ?? { content: null, start: 0, end: 0 }),
+    }));
+  }, [aiReferences, citationContent]);
+
+  // Fetch code snippets for AI citation cards in the background
+  useEffect(() => {
+    if (aiReferences.length === 0) return;
+
+    // Cancel stale requests for refs that are no longer present
+    for (const [id, ctrl] of citationAbortRef.current) {
+      if (!aiReferences.find((r) => r.id === id)) {
+        ctrl.abort();
+        citationAbortRef.current.delete(id);
+      }
+    }
+
+    for (const ref of aiReferences) {
+      if (citationContent[ref.id] !== undefined) continue; // already loaded
+
+      const ctrl = new AbortController();
+      citationAbortRef.current.set(ref.id, ctrl);
+
+      const hasRange = typeof ref.startLine === 'number';
+      const options = hasRange
+        ? {
+            startLine: Math.max(0, (ref.startLine ?? 0) - CONTEXT_LINES),
+            endLine: ((ref.endLine ?? ref.startLine) ?? 0) + CONTEXT_LINES,
+          }
+        : undefined;
+
+      readFile(ref.filePath, options)
+        .then((result) => {
+          setCitationContent((prev) => ({
+            ...prev,
+            [ref.id]: {
+              content: result.content,
+              start: result.startLine ?? 0,
+              end: (result.endLine ?? result.startLine) ?? 0,
+            },
+          }));
+        })
+        .catch((err) => {
+          setCitationContent((prev) => ({
+            ...prev,
+            [ref.id]: {
+              content: null,
+              start: 0,
+              end: 0,
+              error: err instanceof Error ? err.message : '加载失败',
+            },
+          }));
+        })
+        .finally(() => {
+          citationAbortRef.current.delete(ref.id);
+        });
+    }
+  }, [aiReferences, citationContent]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const selectedIsFile = selectedNode?.label === 'File' && !!selectedFilePath;
   const showSelectedViewer = !!selectedNode && !!selectedFilePath;
@@ -200,6 +253,7 @@ export const CodeReferencesPanel = ({ onFocusNode }: CodeReferencesPanelProps) =
 
   const [fileResult, setFileResult] = useState<ReadFileResult | null>(null);
   const [isLoadingFile, setIsLoadingFile] = useState(false);
+  const [fileError, setFileError] = useState<string | null>(null);
   const selectedViewerRef = useRef<HTMLDivElement>(null);
 
   const selectedFileContent = fileResult?.content;
@@ -208,12 +262,14 @@ export const CodeReferencesPanel = ({ onFocusNode }: CodeReferencesPanelProps) =
   useEffect(() => {
     if (!selectedFilePath) {
       setFileResult(null);
+      setFileError(null);
       return;
     }
 
     let cancelled = false;
     setIsLoadingFile(true);
     setFileResult(null);
+    setFileError(null);
 
     // Determine read range: full file for File nodes, buffered for symbols
     const startLine = selectedNode?.properties?.startLine as number | undefined;
@@ -234,10 +290,11 @@ export const CodeReferencesPanel = ({ onFocusNode }: CodeReferencesPanelProps) =
           setIsLoadingFile(false);
         }
       })
-      .catch(() => {
+      .catch((err) => {
         if (!cancelled) {
           setFileResult(null);
           setIsLoadingFile(false);
+          setFileError(err instanceof Error ? err.message : '加载失败');
         }
       });
 
@@ -386,6 +443,27 @@ export const CodeReferencesPanel = ({ onFocusNode }: CodeReferencesPanelProps) =
                   highlightStart={selectedNode?.properties?.startLine as number | undefined}
                   highlightEnd={selectedNode?.properties?.endLine as number | undefined}
                 />
+              ) : fileError ? (
+                <div className="flex flex-col gap-2 px-3 py-3">
+                  <div className="flex items-start gap-2 text-sm text-red-400">
+                    <span>无法加载文件：</span>
+                    <div>
+                      <div className="font-mono text-xs opacity-70">{selectedFilePath}</div>
+                      <div className="mt-1 text-xs text-text-muted">{fileError}</div>
+                    </div>
+                  </div>
+                  {fileError.includes('fetch') || fileError.includes('Failed') || fileError.includes('网络') || fileError.includes('connect') ? (
+                    <div className="text-xs text-text-muted">
+                      后端服务可能未启动，请先运行{' '}
+                      <code className="rounded bg-surface px-1.5 py-0.5 font-mono text-xs text-cyan-400">pnpm run dev:backend</code>
+                      {' '}后再试
+                    </div>
+                  ) : (
+                    <div className="text-xs text-text-muted">
+                      请确认仓库已通过「分析新仓库」功能完成索引
+                    </div>
+                  )}
+                </div>
               ) : (
                 <div className="px-3 py-3 text-sm text-text-muted">
                   {selectedIsFile ? (
@@ -424,7 +502,7 @@ export const CodeReferencesPanel = ({ onFocusNode }: CodeReferencesPanelProps) =
             </div>
             <div className="scrollbar-thin min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
               {refsWithSnippets.map(
-                ({ ref, content, start, highlightStart, highlightEnd, totalLines }) => {
+                ({ ref, content, start, error }) => {
                   const nodeColor = ref.label
                     ? (NODE_COLORS as any)[ref.label] || '#6b7280'
                     : '#6b7280';
@@ -432,6 +510,8 @@ export const CodeReferencesPanel = ({ onFocusNode }: CodeReferencesPanelProps) =
                   const startDisplay = hasRange ? (ref.startLine ?? 0) + 1 : undefined;
                   const endDisplay = hasRange ? (ref.endLine ?? ref.startLine ?? 0) + 1 : undefined;
                   const language = getSyntaxLanguageFromFilename(ref.filePath);
+                  const highlightStart = hasRange ? (ref.startLine ?? 0) : 0;
+                  const highlightEnd = hasRange ? (ref.endLine ?? ref.startLine ?? 0) : 0;
 
                   const isGlowing = glowRefId === ref.id;
 
@@ -469,8 +549,8 @@ export const CodeReferencesPanel = ({ onFocusNode }: CodeReferencesPanelProps) =
                                 {endDisplay !== startDisplay ? `–${endDisplay}` : ''}
                               </span>
                             )}
-                            {totalLines > 0 && (
-                              <span className="text-text-muted"> • {totalLines} 行</span>
+                            {typeof content === 'string' && (
+                              <span className="text-text-muted"> • {content.split('\n').length} 行</span>
                             )}
                           </div>
                         </div>
@@ -539,10 +619,14 @@ export const CodeReferencesPanel = ({ onFocusNode }: CodeReferencesPanelProps) =
                           >
                             {content}
                           </SyntaxHighlighter>
+                        ) : error ? (
+                          <div className="px-3 py-2 text-xs text-red-400">
+                            <div>加载失败：{ref.filePath}</div>
+                            <div className="mt-0.5 text-text-muted">{error}</div>
+                          </div>
                         ) : (
-                          <div className="px-3 py-3 text-sm text-text-muted">
-                            内存中无法加载文件{' '}
-                            <span className="font-mono">{ref.filePath}</span>
+                          <div className="px-3 py-2 text-xs text-text-muted">
+                            正在加载 {ref.filePath}...
                           </div>
                         )}
                       </div>
