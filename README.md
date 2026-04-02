@@ -7,7 +7,7 @@
 **交互式图谱 · 双语注解 · Tier 优先级导航 · AI 智能解读**
 
 [![版本](https://img.shields.io/badge/版本-v0.1.0-blue)](./PRODUCT.md)
-[![技术栈](https://img.shields.io/badge/技术栈-Vue3_·_Node.js_·_Python_·_Sigma.js-green)](./USAGE.md)
+[![技术栈](https://img.shields.io/badge/技术栈-React_18_·_TypeScript_·_Sigma.js_·_Tree--sitter-green)](./USAGE.md)
 [![License](https://img.shields.io/badge/License-MIT-yellow)](./LICENSE)
 
 [产品介绍](./PRODUCT.md) · [使用手册](./USAGE.md) · [快速开始](#快速开始)
