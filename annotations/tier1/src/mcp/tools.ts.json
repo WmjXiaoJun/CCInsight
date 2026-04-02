@@ -1,0 +1,31 @@
+{
+  "path": "src/mcp/tools.ts",
+  "tier": 1,
+  "description": "MCP 工具定义 — 9 个核心工具，将图谱查询能力暴露给 AI 代理。",
+  "annotations": [
+    {
+      "lines": "1-50",
+      "type": "section",
+      "zh": "【工具注册架构】\n每个 MCP 工具通过 `Tool` 接口定义，包含：\n\n```typescript\ninterface Tool {\n  name: string;        // 工具名，AI 通过 name 调用\n  description: string;  // 描述，AI 决定何时使用\n  inputSchema: {       // JSON Schema，输入参数校验\n    type: 'object',\n    properties: {...}\n  };\n  repo?: string;       // 可选仓库参数\n}\n```\n\nAI（Cursor/Claude Code）读取这些描述后，可以自主决定调用哪个工具。\n\n关键设计：描述即文档。描述越详细，AI 使用越准确。",
+      "en": "Tools are self-documenting via JSON Schema — AI reads descriptions to decide when to invoke each tool."
+    },
+    {
+      "lines": "50-150",
+      "type": "section",
+      "zh": "【图谱节点类型】\nCCInsight 的知识图谱支持以下节点类型：\n\n| 类型 | 说明 |\n|------|------|\n| `File` | 源文件 |\n| `Folder` | 文件夹 |\n| `Function` | 函数 |\n| `Class` | 类 |\n| `Interface` | 接口 |\n| `Method` | 类方法 |\n| `Struct` | 结构体（Rust/C） |\n| `Enum` | 枚举 |\n| `Trait` | Trait（Rust） |\n| `Union` | 联合类型 |\n| `Community` | 功能社区（Leiden 聚类） |\n| `Process` | 执行流程 |\n| `Route` | API 路由 |\n| `Tool` | MCP/RPC 工具定义 |",
+      "en": "The knowledge graph supports 14+ node types across TypeScript, Python, Rust, Go, Java, C#, and more."
+    },
+    {
+      "lines": "150-250",
+      "type": "section",
+      "zh": "【关系类型】\n节点之间的关系通过以下边类型建模：\n\n| 边类型 | 说明 |\n|--------|------|\n| `CONTAINS` | 文件包含关系 |\n| `DEFINES` | 定义关系 |\n| `CALLS` | 函数调用 |\n| `IMPORTS` | 导入依赖 |\n| `EXTENDS` | 继承关系 |\n| `IMPLEMENTS` | 接口实现 |\n| `HAS_METHOD` | 类包含方法 |\n| `HAS_PROPERTY` | 类包含属性 |\n| `ACCESSES` | 属性访问 |\n| `OVERRIDES` | 方法重写 |\n| `STEP_IN_PROCESS` | 执行流步骤 |\n| `HANDLES_ROUTE` | 路由处理 |\n| `FETCHES` | HTTP 调用 |\n| `HANDLES_TOOL` | 工具定义 |",
+      "en": "13 edge types model the complete dependency and relationship graph of a codebase."
+    },
+    {
+      "lines": "250-381",
+      "type": "section",
+      "zh": "【query 工具 — 执行流搜索】\n最核心的工具，允许用自然语言搜索知识图谱：\n\n```json\n{\n  \"query\": \"用户认证的处理流程\",\n  \"limit\": 10\n}\n```\n\n工作原理：\n1. 将自然语言 query 转换为 Cypher 图查询\n2. 在 Process 节点和 STEP_IN_PROCESS 边上搜索\n3. 返回匹配的执行链路\n4. 附带 confidence 置信度评分\n\n返回格式包含：\n- 流程名称和节点列表\n- 每步的调用文件\n- overall_confidence 总分",
+      "en": "The `query` tool converts natural language to Cypher queries against the Process subgraph."
+    }
+  ]
+}

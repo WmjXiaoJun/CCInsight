@@ -1,0 +1,6 @@
+{
+  "path": "src/core/ingestion/call-routing.ts",
+  "tier": 4,
+  "description": "路由提取 — 从 AST 中提取 API 路由定义，构建 Route 节点和 HANDLES_ROUTE 边。",
+  "annotations": []
+}

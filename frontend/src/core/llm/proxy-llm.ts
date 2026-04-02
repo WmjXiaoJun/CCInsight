@@ -5,7 +5,7 @@
  * This is used when the LLM provider doesn't support CORS for browser requests.
  */
 
-import { getBackendUrl } from '../services/backend-client';
+import { getBackendUrl } from '../../services/backend-client';
 
 export interface LLMMessage {
   role: 'system' | 'user' | 'assistant';

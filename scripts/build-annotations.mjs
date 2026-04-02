@@ -1,46 +1,56 @@
 /**
  * CCInsight Annotation Bundler
  *
- * Reads all annotations/*.json files (tier1–tier4) and produces:
- *   - frontend/public/annotations/bundle.json   (aggregated array, all annotations merged)
- *   - frontend/public/annotations/MANIFEST.json (copied from annotations/MANIFEST.json)
+ * Reads all annotations/tierN/ files recursively and produces:
+ *   - frontend/public/annotations/bundle.json
+ *   - frontend/public/annotations/MANIFEST.json
  *
  * Run: node scripts/build-annotations.mjs
  */
 
-import { readFileSync, writeFileSync, mkdirSync, copyFileSync, existsSync } from 'fs';
-import { resolve, dirname, join } from 'path';
+import { readFileSync, writeFileSync, mkdirSync, copyFileSync, existsSync, readdirSync, statSync } from 'fs';
+import { dirname, resolve, join } from 'path';
 import { fileURLToPath } from 'url';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const ROOT = resolve(__dirname, '..');
+const __file = fileURLToPath(import.meta.url);
+const ROOT = resolve(dirname(__file), '..');
 const ANNOTATIONS_SRC = join(ROOT, 'annotations');
 const PUBLIC_OUT = join(ROOT, 'frontend', 'public', 'annotations');
-
 const MANIFEST_SRC = join(ANNOTATIONS_SRC, 'MANIFEST.json');
 const BUNDLE_OUT = join(PUBLIC_OUT, 'bundle.json');
 const MANIFEST_OUT = join(PUBLIC_OUT, 'MANIFEST.json');
 
-// Collect all annotation JSON files from tier directories
+const SKIP_FILES = new Set(['MANIFEST.json', '_meta.json']);
 const tierDirs = ['tier1', 'tier2', 'tier3', 'tier4'];
 const bundle = [];
 
-for (const tier of tierDirs) {
-  const tierDir = join(ANNOTATIONS_SRC, tier);
-  if (!existsSync(tierDir)) continue;
+// ─── Recursive walk ────────────────────────────────────────────────────────────
+function walkAnnotations(dir) {
+  for (const entry of readdirSync(dir)) {
+    const fullPath = join(dir, entry);
+    const stat = statSync(fullPath);
 
-  const { readdirSync } = await import('fs');
-  const files = readdirSync(tierDir).filter((f) => f.endsWith('.json'));
-  for (const file of files) {
-    const filePath = join(tierDir, file);
-    try {
-      const content = readFileSync(filePath, 'utf-8');
-      const annotation = JSON.parse(content);
-      bundle.push(annotation);
-    } catch (err) {
-      console.warn(`⚠  Skipping invalid JSON: ${filePath}`, err.message);
+    if (stat.isDirectory()) {
+      walkAnnotations(fullPath); // recurse into subdirectories
+    } else if (stat.isFile() && entry.endsWith('.json') && !SKIP_FILES.has(entry)) {
+      try {
+        const content = readFileSync(fullPath, 'utf-8');
+        const annotation = JSON.parse(content);
+        bundle.push(annotation);
+      } catch (err) {
+        console.warn(`⚠  Skipping invalid JSON: ${fullPath}`, err.message);
+      }
     }
   }
+}
+
+for (const tier of tierDirs) {
+  const tierDir = join(ANNOTATIONS_SRC, tier);
+  if (!existsSync(tierDir)) {
+    console.warn(`⚠  ${tier}/ not found, skipping`);
+    continue;
+  }
+  walkAnnotations(tierDir);
 }
 
 // Sort by tier then by priority (if available)
@@ -49,17 +59,16 @@ bundle.sort((a, b) => {
   return 0;
 });
 
-// Write bundle
+// ─── Write outputs ──────────────────────────────────────────────────────────────
 mkdirSync(PUBLIC_OUT, { recursive: true });
 writeFileSync(BUNDLE_OUT, JSON.stringify(bundle, null, 2), 'utf-8');
 console.log(`✅ bundle.json written — ${bundle.length} files`);
 
-// Copy MANIFEST.json
 if (existsSync(MANIFEST_SRC)) {
   copyFileSync(MANIFEST_SRC, MANIFEST_OUT);
   console.log(`✅ MANIFEST.json copied`);
 } else {
-  console.warn('⚠  MANIFEST.json not found, skipping');
+  console.warn(`⚠  MANIFEST.json not found, skipping`);
 }
 
 console.log(`📁 Output: ${PUBLIC_OUT}`);

@@ -1,0 +1,31 @@
+{
+  "path": "src/core/embeddings/embedder.ts",
+  "tier": 2,
+  "description": "向量嵌入生成器 — 使用 transformers.js 在本地运行 ONNX 模型生成代码语义向量。",
+  "annotations": [
+    {
+      "lines": "1-50",
+      "type": "section",
+      "zh": "【默认模型 snowflake-arctic-embed-xs】\nCCInsight 使用的小型高效嵌入模型：\n\n| 指标 | 数值 |\n|------|------|\n| 参数 | 22M |\n| 向量维度 | 384 |\n| 模型大小 | ~90MB |\n| 用途 | 短文本嵌入（代码片段、函数名） |\n\n选择理由：\n- 足够小的模型可在浏览器边运行（WebGPU）\n- 384 维度在相似度计算中速度够快\n- 专为代码优化（不是通用文本模型）",
+      "en": "snowflake-arctic-embed-xs: 22M params, 384 dims, ~90MB — optimized for code snippets."
+    },
+    {
+      "lines": "50-150",
+      "type": "section",
+      "zh": "【GPU 设备选择策略】\nONNX Runtime 按以下顺序选择执行设备：\n\n1. **Windows**: DirectML (DirectX 12) — GPU 加速\n   ```\n   Ort.DML.XXX.dll\n   ```\n\n2. **Linux CUDA**: 检查 `ldconfig -p | grep libcuda.so`\n   ```\n   /usr/local/cuda/lib64/libcuda.so.1\n   ```\n\n3. **CPU 回退**: 无 GPU 时使用 CPU\n\n```typescript\nconst session = await ort.InferenceSession.create(modelPath, {\n  executionProviders: ['cuda', 'dml', 'cpu']\n});\n```\n\nWindows 上 DirectML 是最常用的 GPU 路径，因为不需要 CUDA 安装。",
+      "en": "Device priority: Windows DirectML → Linux CUDA → CPU fallback. DirectML works without NVIDIA drivers."
+    },
+    {
+      "lines": "150-250",
+      "type": "section",
+      "zh": "【单例模式】\n嵌入模型在进程中只加载一次：\n\n```typescript\nlet embedderInstance: Embedder | null = null;\n\nasync function initEmbedder() {\n  if (!embedderInstance) {\n    embedderInstance = new Embedder(modelConfig);\n    await embedderInstance.load();\n  }\n  return embedderInstance;\n}\n```\n\n为什么用单例？\n- 模型加载耗时（~2-5 秒）\n- 模型文件只读入内存一次\n- 多次调用共享内存\n- 避免 GPU 内存溢出",
+      "en": "Singleton pattern loads the ONNX model once per process to avoid repeated initialization overhead."
+    },
+    {
+      "lines": "250-350",
+      "type": "section",
+      "zh": "【HTTP 远程模式】\n嵌入计算可委托给远程服务器：\n\n```typescript\nif (config.baseUrl) {\n  return fetchFromEmbeddingServer(texts, config.baseUrl);\n}\nreturn embedLocally(texts);\n```\n\n适用场景：\n- 服务器端嵌入（Node.js 环境）\n- 共享 GPU 机器\n- 避免每个仓库重复加载模型\n\n本地模式（浏览器 WebGPU）：\n- 前端可直接在浏览器中生成嵌入\n- 不需要后端有 GPU\n- 适用于小规模仓库分析",
+      "en": "HTTP delegation mode allows a dedicated embedding server to handle vector generation for multiple repositories."
+    }
+  ]
+}

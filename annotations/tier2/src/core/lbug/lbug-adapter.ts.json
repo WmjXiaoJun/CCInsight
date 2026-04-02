@@ -1,0 +1,31 @@
+{
+  "path": "src/core/lbug/lbug-adapter.ts",
+  "tier": 2,
+  "description": "图数据库适配器 — 封装 LadybugDB（SQLite 图数据库），提供 Cypher 查询、CSV 批量加载、全文搜索。",
+  "annotations": [
+    {
+      "lines": "1-100",
+      "type": "section",
+      "zh": "【会话锁机制】\nLadybugDB 是单写模式数据库，任意时刻只能有一个写事务。\n\n`withLbugDb()` 装饰器实现全局写锁：\n\n```typescript\nawait withLbugDb(async (db) => {\n  // 任意时刻只有一个写事务\n  await db.run('INSERT INTO ...');\n});\n```\n\n重试机制：\n- `DB_LOCK_RETRY_ATTEMPTS = 3`\n- 指数退避：500ms → 1000ms → 2000ms\n- BUSY 错误码表示数据库被其他连接占用\n\n这种设计保证了多连接访问时的数据一致性。",
+      "en": "Global write lock via promise chain prevents concurrent write transactions to LadybugDB."
+    },
+    {
+      "lines": "200-300",
+      "type": "section",
+      "zh": "【CSV 批量加载】\n数据写入分两步：\n\n1. **流式写 CSV**：\n   - 先将节点和边数据写入 CSV 文件\n   - CSV 比 JSON 更容易批量解析\n   - 边数据按 FROM→TO 标签对分割成多个 CSV\n\n2. **Bulk COPY**：\n   - 使用 LadybugDB 的 COPY 命令批量导入\n   - 比逐条 INSERT 快 100 倍以上\n\n```typescript\nawait db.copyFrom(csvPath, 'nodes');\n```\n\n回退策略：如果 COPY 失败，降级为逐条 INSERT。",
+      "en": "CSV bulk loading is ~100x faster than row-by-row INSERT. Failed COPY falls back to sequential inserts."
+    },
+    {
+      "lines": "400-500",
+      "type": "section",
+      "zh": "【RFC 4180 CSV 转义】\nLadybugDB 的 COPY 命令使用特殊转义规则：\n\n```typescript\nESCAPE='\"'  // 使用双引号转义，非反斜杠\n```\n\n为什么不用反斜杠？\n- 代码文件中大量使用 `\\`（Windows 路径、C++ 转义）\n- 反斜杠在 CSV 中会被误解\n- 双引号转义避免歧义\n\n```csv\nid,content,type\n\"node_1\",\"const x \\\\\\\\ y = 1\",\"Function\"\n```",
+      "en": "RFC 4180 CSV escaping uses double-quote, not backslash, because code files contain many backslashes."
+    },
+    {
+      "lines": "600-700",
+      "type": "section",
+      "zh": "【FTS 全文索引】\n`createFTSIndex()` 创建全文索引，支持关键词搜索：\n\n```typescript\nCREATE VIRTUAL TABLE nodes_fts USING fts5(\n  content,\n  tokenize='porter'\n);\n```\n\n使用 Porter 词干算法：\n- `running` → `run`\n- `developers` → `develop`\n\n这使得搜索 `develop` 能匹配 `developer`、`development` 等变体。",
+      "en": "FTS5 with Porter stemmer normalizes words to their root form for better keyword matching."
+    }
+  ]
+}

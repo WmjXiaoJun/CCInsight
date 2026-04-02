@@ -1,0 +1,6 @@
+{
+  "path": "src/core/ingestion/community-processor.ts",
+  "tier": 4,
+  "description": "社区检测处理器 — 使用 Leiden 聚类算法将代码模块分组为功能社区。",
+  "annotations": []
+}

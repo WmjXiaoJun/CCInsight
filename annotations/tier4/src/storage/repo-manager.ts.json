@@ -1,0 +1,6 @@
+{
+  "path": "src/storage/repo-manager.ts",
+  "tier": 4,
+  "description": "仓库管理器 — 管理全局索引仓库注册表，处理仓库的增删改查。",
+  "annotations": []
+}

@@ -1,0 +1,37 @@
+{
+  "path": "src/server/api.ts",
+  "tier": 1,
+  "description": "HTTP API — Express 服务器，注册所有 REST 和 SSE 端点，供前端浏览器客户端和 MCP 远程调用。",
+  "annotations": [
+    {
+      "lines": "1-50",
+      "type": "section",
+      "zh": "【CORS 策略】\n`isAllowedOrigin()` 函数白名单控制跨域访问：\n\n允许的来源：\n1. `http://localhost:*` / `http://127.0.0.1:*` — 本地开发\n2. RFC 1918 私网段 — 10.x.x.x、172.16-31.x.x、192.168.x.x\n3. 生产域名 — `ccinsight.vercel.app`\n\n安全限制：只允许 http://，禁止 ftp://、file:// 等危险协议。",
+      "en": "CORS whitelist restricts cross-origin access to localhost and private networks."
+    },
+    {
+      "lines": "100-200",
+      "type": "section",
+      "zh": "【工作线程管理】\n分析任务通过 `fork()` 启动子进程执行，8GB 堆内存限制防止主进程 OOM：\n\n关键参数：\n- `--max-old-space-size=8192` — V8 堆内存上限\n- 父进程捕获子进程退出事件，维护任务状态\n- 30 分钟超时机制，自动终止超时任务",
+      "en": "Child process isolation with 8GB heap limit prevents OOM in the main server."
+    },
+    {
+      "lines": "300-400",
+      "type": "section",
+      "zh": "【SSE 流式推送】\n分析进度通过 Server-Sent Events 实时推送，前端建立长连接订阅进度事件。\n\n事件类型：\n- `progress` — 当前阶段和百分比\n- `nodes` — 节点批次（大量节点时分批推送）\n- `complete` / `failed` — 终止事件",
+      "en": "Server-Sent Events stream real-time analysis progress to the browser client."
+    },
+    {
+      "lines": "500-600",
+      "type": "section",
+      "zh": "【LLM 代理】\n`/api/llm/chat` 代理前端 LLM 请求，解决浏览器 CORS 限制：\n\n流程：\n1. 前端发送请求到 `/api/llm/chat`\n2. 后端转发到 LLM 提供商（OpenAI/Gemini 等）\n3. 流式响应实时推送回前端\n\n优势：无需浏览器配置 CORS，后端统一管理 API Key。",
+      "en": "LLM proxy routes browser requests to LLM providers, bypassing CORS restrictions."
+    },
+    {
+      "lines": "700-800",
+      "type": "section",
+      "zh": "【优雅关闭】\n服务器关闭时按顺序释放资源：\n\n1. 关闭 Express HTTP 服务器\n2. 停止 JobManager 清理定时器\n3. 关闭 MCP HTTP 端点\n4. 关闭 LadybugDB 连接\n\n使用 `process.on('SIGTERM/SIGINT')` 捕获终止信号，确保重启时无僵尸连接。",
+      "en": "Graceful shutdown releases resources in dependency order on SIGTERM/SIGINT."
+    }
+  ]
+}

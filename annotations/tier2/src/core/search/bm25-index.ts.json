@@ -1,0 +1,25 @@
+{
+  "path": "src/core/search/bm25-index.ts",
+  "tier": 2,
+  "description": "BM25 全文搜索 — 基于词频和逆文档频率的关键词搜索，利用 LadybugDB 内置 FTS5 索引。",
+  "annotations": [
+    {
+      "lines": "1-50",
+      "type": "section",
+      "zh": "【BM25 算法原理】\nBM25 是 Elasticsearch、Solr 等搜索引擎的核心算法：\n\n```\nscore = IDF(qi) × (tf(qi,d) × (k+1))\n                      / (tf(qi,d) + k × (1-b + b × |d|/avgdl))\n```\n\n| 参数 | 说明 |\n|------|------|\n| `tf(qi,d)` | 词项 qi 在文档 d 中的出现次数 |\n| `IDF(qi)` | 逆文档频率，词越常见分数越低 |\n| `k` (~1.2-2.0) | 词频饱和参数 |\n| `b` (~0.75) | 文档长度归一化参数 |\n\n核心思想：词在文档中出现次数越多分数越高，但有上限（饱和）。",
+      "en": "BM25 (Best Matching 25) scores documents by term frequency with saturation and inverse document frequency."
+    },
+    {
+      "lines": "50-150",
+      "type": "section",
+      "zh": "【多表并行搜索】\nBM25 搜索同时查询多个节点表：\n\n```typescript\nconst tables = ['File', 'Function', 'Class', 'Method', 'Interface'];\nconst results = await Promise.all(\n  tables.map(t => searchTable(t, query, limit))\n);\n```\n\n为什么并行？\n- 各表的 FTS 索引互相独立\n- 并行查询减少总延迟\n- 结果按 filePath 合并，相同文件的分数累加\n\n合并策略：\n- 搜索结果按 filePath 分组\n- 同一文件的多个匹配累加 BM25 分数\n- 最终按总分排序",
+      "en": "Parallel multi-table search with score aggregation by filePath."
+    },
+    {
+      "lines": "150-250",
+      "type": "section",
+      "zh": "【始终读取磁盘】\n搜索永远直接从 FTS 索引读取，不使用缓存：\n\n```typescript\n// 每次搜索都读磁盘，不缓存结果\nconst results = await queryFTS(sql, params);\n```\n\n设计决策：\n- 代码仓库经常变化（用户修改代码）\n- 缓存会导致搜索结果与实际代码不同步\n- FTS 查询足够快（毫秒级），不需要缓存\n\n与嵌入向量搜索（需要预计算）形成对比：BM25 适合即时搜索，语义搜索适合探索性查询。",
+      "en": "Always reads from disk (no caching) to ensure search results stay in sync with the live codebase."
+    }
+  ]
+}

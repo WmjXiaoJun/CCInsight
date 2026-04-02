@@ -1,0 +1,10 @@
+{
+  "tier": 2,
+  "name": "通信层",
+  "nameEn": "Communication Layer",
+  "description": "MCP 协议服务、搜索服务 — CCInsight 与外部工具通信的桥梁。",
+  "color": "#f97316",
+  "priority": 2,
+  "totalFiles": 6,
+  "annotatedFiles": 6
+}

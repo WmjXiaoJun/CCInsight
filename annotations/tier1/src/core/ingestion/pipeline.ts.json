@@ -1,0 +1,31 @@
+{
+  "path": "src/core/ingestion/pipeline.ts",
+  "tier": 1,
+  "description": "分析管道协调器 — 14 个阶段流水线，从文件扫描到图谱构建，全程进度回调。",
+  "annotations": [
+    {
+      "lines": "1-100",
+      "type": "section",
+      "zh": "【14 阶段流水线】\nCCInsight 的分析管道分 14 个阶段，每阶段可独立报告进度：\n\n| 阶段 | 名称 | 说明 |\n|------|------|------|\n| 1-2 | 扫描与结构 | 构建文件和文件夹节点 |\n| 3-4 | 解析与导入 | Tree-sitter 解析，分块并行 |\n| 5 | 调用关系 | 函数调用和导入关系 |\n| 6 | 继承关系 | MRO 解析 |\n| 7 | 社区检测 | Leiden 聚类 |\n| 8 | 流程提取 | 执行链路分析 |\n| 14 | 跨文件绑定传播 | 类型推断传播 |\n\n关键设计：阶段间可以传递状态，前置阶段的输出是后续阶段的输入。",
+      "en": "14-phase pipeline orchestrates scanning, parsing, analysis, and graph construction."
+    },
+    {
+      "lines": "200-300",
+      "type": "section",
+      "zh": "【20MB 分块策略】\n源文件按 20MB 分块，每块使用独立工作线程并行解析：\n\n为什么是 20MB？\n- 单个文件超过 20MB 时，Tree-sitter AST 内存占用可能达到 400-800MB\n- 20MB 边界让内存峰值可控\n- 小文件合并到同一块，减少进程创建开销\n\n大型仓库（≥15 文件或 ≥512KB）启用工作线程池，小型仓库顺序执行。",
+      "en": "20MB chunk budget limits peak memory usage during parallel Tree-sitter parsing."
+    },
+    {
+      "lines": "400-500",
+      "type": "section",
+      "zh": "【Kahn 算法拓扑排序】\n使用拓扑排序解决循环导入问题：\n\n```typescript\nconst inDegree = new Map<string, number>();\n// ... 构建入度图\n// ... BFS 拓扑排序\n```\n\n设计意图：\n- 循环导入在大型项目中很常见\n- 通过跳过循环边找到可行的处理顺序\n- 保证类型绑定从上到下正确传播",
+      "en": "Kahn's algorithm resolves circular import dependencies for type binding propagation."
+    },
+    {
+      "lines": "600-700",
+      "type": "section",
+      "zh": "【跳过阈值 3%】\n跨文件类型绑定传播有跳过机制：如果受影响的文件占比 < 3%，则跳过该轮传播：\n\n```typescript\nif (benefitedFiles.size / totalFiles < CROSS_FILE_SKIP_THRESHOLD) {\n  break;\n}\n```\n\n理由：\n- 跨文件传播是 O(n²) 级别的计算\n- 收益很小时不值得消耗资源\n- 3% 阈值在实践中平衡了准确性和性能",
+      "en": "3% skip threshold avoids expensive cross-file propagation when benefits are marginal."
+    }
+  ]
+}

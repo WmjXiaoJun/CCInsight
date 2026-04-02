@@ -1,0 +1,25 @@
+{
+  "path": "src/core/wiki/generator.ts",
+  "tier": 2,
+  "description": "Wiki 生成器 — 从知识图谱自动生成架构文档，支持模块树构建、增量更新、并行生成。",
+  "annotations": [
+    {
+      "lines": "1-100",
+      "type": "section",
+      "zh": "【模块树自顶向下构建】\nWiki 生成的核心是构建模块树：\n\n```\n仓库\n├── 前端（frontend/）\n│   ├── components/\n│   │   ├── App.tsx\n│   │   └── ...\n│   ├── hooks/\n│   └── services/\n└── 后端（backend/）\n    ├── server/\n    └── core/\n```\n\n构建流程：\n1. **Phase 1**: LLM 分析所有文件，一次调用生成顶层模块\n2. **Phase 2**: 每个叶模块生成独立文档（并行）\n3. **Phase 3**: 父模块从子模块文档汇总（顺序）\n\n```typescript\nawait buildModuleTree();       // 一次 LLM 调用\nawait generateLeafPages();      // 叶模块并行\nawait generateParentPages();    // 父模块汇总\n```",
+      "en": "LLM-driven module tree: top-level grouping in one call, leaves in parallel, parents sequentially."
+    },
+    {
+      "lines": "200-300",
+      "type": "section",
+      "zh": "【增量更新机制】\n代码变更后只重新生成受影响的模块：\n\n```typescript\nconst changedFiles = await detectChangedFiles(repoPath, snapshot);\nconst affectedModules = findAffectedModules(changedFiles, tree);\nawait regenerateAffected(affectedModules);\n```\n\n流程：\n1. 对比当前文件与上次生成的快照\n2. 找出有变更的文件\n3. 找到这些文件所属的模块\n4. 只重新生成受影响的模块\n\n优势：\n- LLM 调用成本降低 90%+\n- 生成速度提升 10 倍\n- 不重复生成未变更内容",
+      "en": "Incremental updates detect changed files and regenerate only affected modules, reducing LLM costs by 90%+."
+    },
+    {
+      "lines": "400-500",
+      "type": "section",
+      "zh": "【并发与速率限制】\n并行生成模块时有过载保护：\n\n```typescript\nconst sem = new Semaphore(maxConcurrency); // 控制并发数\n\nfor (const module of modules) {\n  await sem.acquire();\n  generateModule(module).finally(() => sem.release());\n}\n```\n\n遇到 429（速率限制）时：\n```typescript\nif (error.status === 429) {\n  await sleep(1000 * retries);  // 指数退避\n  maxConcurrency = Math.max(1, maxConcurrency - 1); // 降低并发\n}\n```\n\n自适应策略：\n- 正常时并发度高（快速完成）\n- 遇到限流时自动降低并发\n- 不会完全停止（保留至少 1 个并发）",
+      "en": "Adaptive concurrency with semaphore and exponential backoff handles rate limits gracefully."
+    }
+  ]
+}

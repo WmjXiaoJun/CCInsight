@@ -1,0 +1,19 @@
+{
+  "path": "src/cli/wiki.ts",
+  "tier": 3,
+  "description": "wiki 命令 — 交互式生成架构文档，支持 OpenAI/OpenRouter/Azure/Cursor CLI 等多种 LLM 提供商。",
+  "annotations": [
+    {
+      "lines": "1-50",
+      "type": "section",
+      "zh": "【交互式 LLM 配置】\nwiki 命令引导用户选择 LLM 提供商：\n\n```typescript\nconsole.log('Select LLM provider:');\nconsole.log('1. OpenAI (api.openai.com)');\nconsole.log('2. OpenRouter (openrouter.ai)');\nconsole.log('3. Azure OpenAI');\nconsole.log('4. Custom endpoint');\nconsole.log('5. Cursor CLI (no API key needed)');\nconst choice = await prompt('Choice');\n```\n\n各选项特点：\n- **OpenAI**: GPT-4o，最通用\n- **OpenRouter**: 聚合多个模型，性价比高\n- **Azure**: 企业级，安全合规\n- **Custom**: 支持任何兼容 OpenAI API 的服务器\n- **Cursor CLI**: 免费，直接用 Cursor 的 API",
+      "en": "Interactive LLM provider selection guides users through OpenAI, OpenRouter, Azure, Custom, or Cursor CLI."
+    },
+    {
+      "lines": "50-150",
+      "type": "section",
+      "zh": "【GitHub Gist 发布】\n生成的文档可选发布到 GitHub Gist：\n\n```typescript\nasync function publishGist(files: WikiFiles) {\n  const body = JSON.stringify({\n    description: `${repoName} documentation`,\n    public: true,\n    files: files.reduce((acc, f) => ({ ...acc, [f.name]: { content: f.content } }), {})\n  });\n  return gh gist create --public -f manifest.json;\n}\n```\n\n为什么用 Gist 而不是 Repo？\n- 不需要用户授权创建仓库\n- Gist 是独立对象，删除 wiki 不污染仓库历史\n- 分享链接简短（`gist.github.com/{id}`）",
+      "en": "GitHub Gist publishing provides shareable links without requiring repository creation permissions."
+    }
+  ]
+}

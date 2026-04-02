@@ -1,0 +1,6 @@
+{
+  "path": "src/core/tree-sitter/parser-loader.ts",
+  "tier": 4,
+  "description": "Tree-sitter 解析器加载器 — 统一管理多语言解析器实例，支持按需加载和缓存。",
+  "annotations": []
+}

@@ -1,0 +1,25 @@
+{
+  "path": "src/cli/tool.ts",
+  "tier": 3,
+  "description": "tool 子命令 — 直接调用图谱工具，跳过 MCP，零开销的命令行工具。",
+  "annotations": [
+    {
+      "lines": "1-50",
+      "type": "section",
+      "zh": "【跳过 MCP 直接调用】\ntool 命令绕过 MCP JSON-RPC 协议，直接调用 `LocalBackend`：\n\n```typescript\n// MCP 方式（慢）：\n// $ cursor \"用 ccinsight 查认证流程\"\n// → 启动 MCP 子进程 → JSON-RPC → JSON 解析\n\n// 直接方式（快）：\n// $ ccinsight query \"认证流程\"\n// → 直接调用 LocalBackend → Cypher 查询\n```\n\n性能差距：\n- MCP: ~200-500ms 进程启动 + JSON-RPC 开销\n- 直接: ~5-10ms 函数调用\n\n适用场景：\n- 快速调试和脚本\n- CI/CD 集成\n- 不需要 AI 推理只需要图谱查询",
+      "en": "Direct LocalBackend invocation is ~20-50x faster than MCP by eliminating JSON-RPC process overhead."
+    },
+    {
+      "lines": "50-150",
+      "type": "section",
+      "zh": "【输出绕过 stdout 捕获】\nLadybugDB 模块会捕获 `process.stdout` 用于内部日志。tool 命令用 `fs.writeSync(1, ...)` 绕过：\n\n```typescript\n// 绕过任何 stdout 拦截\nfs.writeSync(1, JSON.stringify(result) + '\\n');\n```\n\n为什么需要绕过？\n- LadybugDB 在查询时会写入 stdout\n- `console.log` 的输出会被混入 LadybugDB 的日志\n- `writeSync(1, ...)` 直接写到操作系统的 stdout fd\n- 确保结果纯净",
+      "en": "Direct fd write (writeSync to fd=1) bypasses LadybugDB's stdout capture for pure JSON output."
+    },
+    {
+      "lines": "150-250",
+      "type": "section",
+      "zh": "【EPIPE 优雅处理】\n当输出被管道到 `head` 等命令时，写入会触发 EPIPE 错误：\n\n```typescript\ntry {\n  fs.writeSync(1, result + '\\n');\n} catch (err) {\n  if (err.code === 'EPIPE') {\n    process.exit(0);  // 干净的退出\n  }\n  throw err;  // 其他错误继续抛出\n}\n```\n\n场景：\n```bash\nccinsight query \"认证\" | head -5\n```\n`head` 只读 5 行后关闭 stdin，CCInsight 继续写入会触发 EPIPE。处理方式是直接退出（exit 0），不是报错。",
+      "en": "EPIPE handling allows ccinsight to pipe into head/tail without erroring out."
+    }
+  ]
+}

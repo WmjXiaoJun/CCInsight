@@ -1,0 +1,25 @@
+{
+  "path": "src/server/git-clone.ts",
+  "tier": 1,
+  "description": "Git 克隆与更新 — 浅克隆仓库到 ~/.ccinsight/repos/，支持断点续传。",
+  "annotations": [
+    {
+      "lines": "1-50",
+      "type": "section",
+      "zh": "【SSRF 防护】\n`validateGitUrl()` 是最重要的安全函数，阻止服务器被用于攻击内网：\n\n禁止的地址类型：\n- localhost / 127.x.x.x / [::1]\n- 10.x.x.x（RFC 1918 企业内网）\n- 172.16-31.x.x（RFC 1918 私网）\n- 192.168.x.x（RFC 1918 私网）\n- 169.254.x.x（链路本地地址）\n- 0.x.x.x（当前网络）\n\n只允许 https:// 和 http:// 协议，阻止本地文件访问。",
+      "en": "SSRF protection blocks localhost and RFC 1918 private network addresses."
+    },
+    {
+      "lines": "50-120",
+      "type": "section",
+      "zh": "【浅克隆策略】\n使用 `--depth 1` 只克隆最新一次提交，大幅减少下载量和磁盘占用：\n\n```bash\ngit clone --depth 1 <url>\n```\n\n优势：\n- 下载量从完整历史（数百 MB）减少到最新快照（数十 MB）\n- 克隆时间从分钟级降到秒级\n- 足够进行代码结构分析（不需要历史）",
+      "en": "Shallow clone with `--depth 1` reduces download size and clone time."
+    },
+    {
+      "lines": "120-180",
+      "type": "section",
+      "zh": "【FF-only 拉取策略】\n更新已克隆仓库时使用 `git pull --ff-only`：\n\n```bash\ngit pull --ff-only\n```\n\n设计决策：\n- 如果本地有未合并的提交，pull 会失败而非创建 merge commit\n- 避免引入复杂的 merge 历史\n- 强制用户手动处理冲突，保证索引结果与 HEAD 一致",
+      "en": "Fast-forward only pull prevents unexpected merge commits in the cloned repo."
+    }
+  ]
+}

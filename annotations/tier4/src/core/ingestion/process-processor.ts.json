@@ -1,0 +1,6 @@
+{
+  "path": "src/core/ingestion/process-processor.ts",
+  "tier": 4,
+  "description": "执行流处理 — 从 AST 中提取调用链路，构建 Process 节点表示执行路径。",
+  "annotations": []
+}

@@ -1,0 +1,25 @@
+{
+  "path": "src/cli/analyze.ts",
+  "tier": 3,
+  "description": "analyze 命令 — 完整仓库分析入口，管理堆内存、进度条、信号处理、最终摘要输出。",
+  "annotations": [
+    {
+      "lines": "1-50",
+      "type": "section",
+      "zh": "【8GB 堆内存保证】\n分析命令需要大量内存（Tree-sitter AST + LadybugDB），通过 `ensureHeap()` 检查当前进程堆大小：\n\n```typescript\nif (!hasEnoughHeap()) {\n  console.log('Restarting with 8GB heap...');\n  const newArgv = [...process.argv, '--max-old-space-size=8192'];\n  process.exit(cp.spawnSync(process.argv[0], newArgv, { stdio: 'inherit' }).status || 1);\n}\n```\n\n为什么只有 analyze 需要 8GB？\n- CLI 主进程只需要几百 MB\n- `serve` 和 `mcp` 命令不需要 fork 子进程\n- 只有子进程需要大量内存",
+      "en": "Re-executes with 8GB heap limit only for analyze command, not for serve/mcp commands."
+    },
+    {
+      "lines": "50-150",
+      "type": "section",
+      "zh": "【进度条设计】\n`bar.log()` 路由所有输出到进度条区域，防止日志和进度条相互覆盖：\n\n```typescript\n// 将 console.log 重定向到 bar.log()\n// 所有模块的日志都显示在同一区域\nbar.log('Phase 3/8: Parsing files...');\nbar.log(`  Files: ${stats.fileCount}`);\n```\n\n为什么需要路由？\n- 多模块同时输出日志\n- 直接 console.log 会和进度条混在一起\n- `bar.log()` 确保日志在进度条下方显示",
+      "en": "All output is routed through bar.log() to prevent progress bar corruption from concurrent module logs."
+    },
+    {
+      "lines": "150-250",
+      "type": "section",
+      "zh": "【信号处理】\n捕获 SIGINT（Ctrl+C）实现优雅关闭：\n\n```typescript\nprocess.on('SIGINT', () => {\n  bar.log('\\nReceived SIGINT, shutting down...');\n  // 清理临时文件、关闭数据库连接\n  cleanup();\n  process.exit(130);  // 128 + SIGINT(2)\n});\n```\n\n设计意图：\n- 用户按 Ctrl+C 时不要留下不完整的索引\n- 清理临时文件（中间 CSV、分析缓存）\n- 正确退出码（130）让调用方知道是用户中断",
+      "en": "SIGINT handler cleans up partial index data on Ctrl+C, exiting with code 130."
+    }
+  ]
+}

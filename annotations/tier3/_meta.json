@@ -1,0 +1,10 @@
+{
+  "tier": 3,
+  "name": "命令层",
+  "nameEn": "Command Layer",
+  "description": "各 CLI 子命令实现 — analyze/wiki/serve 等独立命令的具体逻辑。",
+  "color": "#eab308",
+  "priority": 3,
+  "totalFiles": 5,
+  "annotatedFiles": 5
+}

@@ -1,0 +1,25 @@
+{
+  "path": "src/cli/setup.ts",
+  "tier": 3,
+  "description": "setup 命令 — 为 Cursor/Claude Code/OpenCode/Codex 配置 MCP 连接，写入 JSON 配置文件。",
+  "annotations": [
+    {
+      "lines": "1-50",
+      "type": "section",
+      "zh": "【多编辑器检测】\nsetup 命令自动检测系统中安装的 AI 编辑器：\n\n```typescript\nconst detected = [];\nif (await isCursorInstalled()) detected.push('cursor');\nif (await isClaudeCodeInstalled()) detected.push('claude-code');\nif (await isOpenCodeInstalled()) detected.push('opencode');\n```\n\n每种编辑器有自己的配置方式：\n- **Cursor**: `~/.cursor/mcp.json`\n- **Claude Code**: `~/.claude.json` + hooks 目录\n- **OpenCode**: `~/.config/opencode/config.json`\n- **Codex**: `~/.codex/config.toml`",
+      "en": "Auto-detects installed AI editors and configures MCP connection for each."
+    },
+    {
+      "lines": "50-150",
+      "type": "section",
+      "zh": "【MCP Hooks 注入】\nClaude Code 支持 PreToolUse 和 PostToolUse hooks：\n\n```typescript\n// PreToolUse: 在 git commit 前运行 ccinsight augment\n// PostToolUse: 在 git merge 后自动重新分析\nconst hooks = {\n  preToolUse: [\n    { hook: 'BeforeAnyCommand', command: 'ccinsight aug' }\n  ],\n  postToolUse: [\n    { hook: 'AfterGitOperation', command: 'ccinsight analyze' }\n  ]\n};\n```\n\n效果：\n- `git commit` 时自动丰富提交信息\n- `git merge` 后自动更新索引\n- 无需手动触发",
+      "en": "Claude Code hooks automatically trigger ccinsight analyze after git operations."
+    },
+    {
+      "lines": "150-250",
+      "type": "section",
+      "zh": "【会话启动钩子限制】\nSessionStart hook 在 Windows 上有已知问题：\n\n```typescript\nif (isWindows && hasSessionStartHook) {\n  result.warnings.push(\n    'SessionStart hook is not supported on Windows (Claude Code bug #23576)'\n  );\n}\n```\n\n问题原因：\n- Claude Code 在 Windows 上的会话初始化时序问题\n- SessionStart hook 可能在 repo 未完全加载时触发\n- CCInsight 检测到这个问题后跳过该 hook",
+      "en": "SessionStart hook skipped on Windows due to Claude Code bug #23576."
+    }
+  ]
+}

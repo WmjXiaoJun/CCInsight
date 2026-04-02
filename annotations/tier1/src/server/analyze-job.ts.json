@@ -1,0 +1,31 @@
+{
+  "path": "src/server/analyze-job.ts",
+  "tier": 1,
+  "description": "分析任务调度器 — 内存 Map 追踪任务状态，单槽并发，同仓库去重，TTL 自动清理。",
+  "annotations": [
+    {
+      "lines": "1-50",
+      "type": "section",
+      "zh": "【任务状态机】\n`AnalyzeJob` 状态流转：\n\n`queued` → `cloning` → `analyzing` → `loading` → `complete`\n                                         ↓\n                                      `failed`\n\n设计意图：\n- `cloning` 阶段单独拆分，克隆仓库耗时独立追踪\n- `loading` 阶段将索引写入 LadybugDB\n- 任何阶段失败都进入 `failed` 状态",
+      "en": "Job state machine: queued → cloning → analyzing → loading → complete/failed."
+    },
+    {
+      "lines": "50-150",
+      "type": "section",
+      "zh": "【单槽并发策略】\n同时只运行一个分析任务，新任务在已有任务运行时进入排队：\n\n```typescript\nif (this.activeJobId !== null) {\n  throw new Error('Another analysis is already running');\n}\n```\n\n限制理由：\n- 分析任务消耗大量内存（子进程 8GB 堆）\n- LadybugDB 写入事务互斥\n- 避免多个任务竞争磁盘 I/O",
+      "en": "Single-slot concurrency prevents memory pressure and DB write conflicts."
+    },
+    {
+      "lines": "150-250",
+      "type": "section",
+      "zh": "【同仓库去重】\n同一仓库的重复分析请求返回已有的任务 ID，而非创建新任务：\n\n```typescript\nfor (const job of this.jobs.values()) {\n  if (job.repoUrl === url && job.status !== 'failed') {\n    return { jobId: job.id, existing: true };\n  }\n}\n```\n\n效果：防止用户多次点击「分析」产生重复任务。",
+      "en": "Same-repo deduplication prevents duplicate analysis jobs."
+    },
+    {
+      "lines": "250-350",
+      "type": "section",
+      "zh": "【TTL 自动清理】\n每 5 分钟清理一次超过 60 分钟的过期任务，防止内存泄漏：\n\n```typescript\nsetInterval(() => {\n  const cutoff = Date.now() - JOB_TTL_MS;\n  for (const [id, job] of this.jobs) {\n    if (job.completedAt && job.completedAt < cutoff) {\n      this.jobs.delete(id);\n    }\n  }\n}, CLEANUP_INTERVAL_MS);\n```\n\n注意：只清理已完成的任务，运行中任务不受影响。",
+      "en": "TTL-based cleanup removes stale jobs every 5 minutes to prevent memory leaks."
+    }
+  ]
+}

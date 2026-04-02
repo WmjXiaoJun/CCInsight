@@ -1,0 +1,6 @@
+{
+  "path": "src/storage/git.ts",
+  "tier": 4,
+  "description": "Git 工具 — 提供 diff、blame、log 等 Git 操作接口，供分析管道使用。",
+  "annotations": []
+}

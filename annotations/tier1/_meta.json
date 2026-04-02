@@ -1,0 +1,10 @@
+{
+  "tier": 1,
+  "name": "核心层",
+  "nameEn": "Core Layer",
+  "description": "系统核心引擎 — CLI 入口、HTTP API、分析管道。理解这层即可掌握 CCInsight 的整体设计理念。",
+  "color": "#ef4444",
+  "priority": 1,
+  "totalFiles": 11,
+  "annotatedFiles": 9
+}

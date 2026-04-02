@@ -1,0 +1,10 @@
+{
+  "tier": 4,
+  "name": "工具层",
+  "nameEn": "Utility Layer",
+  "description": "底层工具模块 — 代码解析器、嵌入向量生成、图数据库适配器等。",
+  "color": "#22c55e",
+  "priority": 4,
+  "totalFiles": 9,
+  "annotatedFiles": 0
+}

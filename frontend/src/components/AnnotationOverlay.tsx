@@ -11,7 +11,9 @@ import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { getSyntaxLanguageFromFilename } from 'ccinsight-shared';
 import { BookOpen, Maximize2, Minimize2, X, Loader2, AlertCircle, RefreshCw, Sparkles } from '@/lib/lucide-icons';
 import { useLLMAnnotations } from '../hooks/useLLMAnnotations';
+import { useStaticAnnotations } from '../hooks/useStaticAnnotations';
 import type { LLMAnnotation } from '../services/llm-annotation-types';
+import type { LineAnnotation } from '../annotations/types';
 
 interface AnnotatedCodeViewerProps {
   /** File content to display */
@@ -176,12 +178,16 @@ const AnnotationStatus = ({
   error,
   annotationCount,
   onRetry,
+  staticCount,
+  llmCount,
 }: {
   isGenerating: boolean;
   isConfigured: boolean;
   error: string | null;
   annotationCount: number;
   onRetry?: () => void;
+  staticCount?: number;
+  llmCount?: number;
 }) => {
   if (!isConfigured) {
     return (
@@ -236,7 +242,14 @@ const AnnotationStatus = ({
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '11px', color: '#34d399' }}>
         <Sparkles size={13} />
-        <span>已生成 {annotationCount} 个注释</span>
+        <span>
+          {annotationCount} 个注释
+          {staticCount !== undefined && (
+            <span style={{ color: '#6B7280' }}>
+              {' '}({staticCount} 静态 + {llmCount ?? 0} AI)
+            </span>
+          )}
+        </span>
       </div>
     );
   }
@@ -259,15 +272,53 @@ export const AnnotatedCodeViewer: React.FC<AnnotatedCodeViewerProps> = ({
   const [selectedAnn, setSelectedAnn] = useState<LLMAnnotation | null>(null);
   const viewerRef = React.useRef<HTMLDivElement>(null);
 
-  // Use LLM annotations hook
+  // ── Static annotations (pre-authored, loaded from /annotations/bundle.json) ──
   const {
-    annotations,
+    fileAnnotation: staticFileAnnotation,
+    lineAnnotations: staticLineAnnotations,
+    isLoaded: staticLoaded,
+  } = useStaticAnnotations(filePath);
+
+  // ── LLM annotations (dynamically generated) ──
+  const {
+    annotations: llmAnnotations,
     isGenerating,
     error,
     isConfigured,
     generate,
     clearCache,
   } = useLLMAnnotations(content, filePath, { autoGenerate: true, debounceMs: 1000 });
+
+  // ── Merge: Static annotations take priority; LLM supplements gaps ──
+  // Build a map of line → static annotation for quick lookup
+  const staticByLine = useMemo(() => {
+    const map = new Map<number, LineAnnotation>();
+    for (const ann of staticLineAnnotations) {
+      const [start, end] = (() => {
+        if (ann.lines.includes('-')) return ann.lines.split('-').map(Number);
+        const n = Number(ann.lines);
+        return [n, n];
+      })();
+      for (let line = start; line <= end; line++) {
+        if (!map.has(line)) {
+          map.set(line, ann);
+        }
+      }
+    }
+    return map;
+  }, [staticLineAnnotations]);
+
+  // LLM annotations for lines not covered by static annotations
+  const supplementaryLlms = useMemo(
+    () =>
+      llmAnnotations.filter(
+        (ann) => !staticByLine.has(ann.lineStart)
+      ),
+    [llmAnnotations, staticByLine]
+  );
+
+  // Total count shown in status
+  const totalAnnotationCount = staticLineAnnotations.length + supplementaryLlms.length;
 
   // Notify parent of status changes
   useEffect(() => {
@@ -276,13 +327,13 @@ export const AnnotatedCodeViewer: React.FC<AnnotatedCodeViewerProps> = ({
         onAnnotationStatusChange('generating');
       } else if (error) {
         onAnnotationStatusChange('error', error);
-      } else if (annotations.length > 0) {
+      } else if (totalAnnotationCount > 0) {
         onAnnotationStatusChange('done');
       } else {
         onAnnotationStatusChange('idle');
       }
     }
-  }, [isGenerating, error, annotations.length, onAnnotationStatusChange]);
+  }, [isGenerating, error, totalAnnotationCount, onAnnotationStatusChange]);
 
   // Reset selected annotation when file changes
   useEffect(() => {
@@ -316,10 +367,11 @@ export const AnnotatedCodeViewer: React.FC<AnnotatedCodeViewerProps> = ({
     const lineNum0 = (startLine || 0) + index;
     const lineNum1 = lineNum0 + 1;
 
-    // Find annotation for this line
-    const lineAnnotation = annotations.find(
-      ann => lineNum0 >= ann.lineStart && lineNum0 <= ann.lineEnd
-    );
+    // Priority: static annotation > LLM supplementary
+    const staticAnn = staticByLine.get(lineNum0);
+    const llmAnn = !staticAnn
+      ? supplementaryLlms.find((ann) => lineNum0 >= ann.lineStart && lineNum0 <= ann.lineEnd)
+      : undefined;
 
     const isHighlighted =
       hlStart0 !== undefined &&
@@ -327,7 +379,19 @@ export const AnnotatedCodeViewer: React.FC<AnnotatedCodeViewerProps> = ({
       lineNum0 >= hlStart0 &&
       lineNum0 <= hlEnd0;
 
-    const bubbleColor = lineAnnotation ? TYPE_COLORS[lineAnnotation.type] : undefined;
+    const bubbleColor = staticAnn ? TYPE_COLORS[staticAnn.type] : llmAnn ? TYPE_COLORS[llmAnn.type] : undefined;
+
+    // Unified annotation object for rendering
+    const effectiveAnn = staticAnn
+      ? {
+          type: staticAnn.type,
+          name: staticAnn.name,
+          zh: staticAnn.zh,
+          en: staticAnn.en,
+        }
+      : llmAnn
+      ? { type: llmAnn.type, name: llmAnn.name, zh: llmAnn.zh, en: llmAnn.en ?? null }
+      : undefined;
 
     return (
       <div
@@ -363,10 +427,32 @@ export const AnnotatedCodeViewer: React.FC<AnnotatedCodeViewerProps> = ({
           >
             {lineNum1}
           </span>
-          {lineAnnotation && (
+          {effectiveAnn && (
             <AnnotationBubble
-              ann={lineAnnotation}
-              onClick={() => handleAnnotationClick(lineAnnotation)}
+              ann={{
+                id: `static-${lineNum0}`,
+                filePath,
+                lineStart: lineNum0,
+                lineEnd: lineNum0,
+                type: effectiveAnn.type as any,
+                name: effectiveAnn.name,
+                zh: effectiveAnn.zh,
+                en: effectiveAnn.en ?? undefined,
+                confidence: 1.0,
+                generatedAt: 0,
+              }}
+              onClick={() => handleAnnotationClick({
+                id: `static-${lineNum0}`,
+                filePath,
+                lineStart: lineNum0,
+                lineEnd: lineNum0,
+                type: effectiveAnn.type as any,
+                name: effectiveAnn.name,
+                zh: effectiveAnn.zh,
+                en: effectiveAnn.en ?? undefined,
+                confidence: 1.0,
+                generatedAt: 0,
+              })}
             />
           )}
         </div>
@@ -405,8 +491,10 @@ export const AnnotatedCodeViewer: React.FC<AnnotatedCodeViewerProps> = ({
           isGenerating={isGenerating}
           isConfigured={isConfigured}
           error={error}
-          annotationCount={annotations.length}
+          annotationCount={totalAnnotationCount}
           onRetry={generate}
+          staticCount={staticLineAnnotations.length}
+          llmCount={supplementaryLlms.length}
         />
 
         {onTogglePanel && (

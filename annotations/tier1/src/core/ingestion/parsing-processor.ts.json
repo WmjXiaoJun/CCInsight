@@ -1,0 +1,31 @@
+{
+  "path": "src/core/ingestion/parsing-processor.ts",
+  "tier": 1,
+  "description": "代码解析器 — 基于 Tree-sitter 的多语言 AST 解析，提取符号、调用、导入、路由等信息。",
+  "annotations": [
+    {
+      "lines": "1-100",
+      "type": "section",
+      "zh": "【工作线程与顺序回退】\n解析器有两个执行路径：\n\n1. **工作线程池**（大型仓库）：\n   - 适用条件：文件数 ≥15 或总大小 ≥512KB\n   - 使用 Node.js `worker_threads` 并行解析\n   - 每个工作线程独立加载 Tree-sitter 解析器\n\n2. **顺序执行**（小型仓库）：\n   - 适用条件：不满足上述条件\n   - 直接在主线程解析，无需进程通信开销\n   - 有 AST 缓存（50 棵树）加速重复解析\n\n设计决策：大型仓库用并行，小型仓库用顺序，平衡了 CPU 利用率和启动开销。",
+      "en": "Worker pool for large repos, sequential fallback for small repos — balances CPU utilization and startup overhead."
+    },
+    {
+      "lines": "100-200",
+      "type": "section",
+      "zh": "【语言感知解析器】\n通过 `getProvider(language)` 获取语言特定的解析提供者：\n\n每种语言有自己的提取器实现：\n- **TypeScript/JavaScript**: 类型推断、装饰器路由\n- **Python**: 命名绑定、导入别名解析\n- **Rust**: Trait/Impl 结构\n- **Go**: 命名绑定、接口嵌入\n\n```typescript\nconst provider = getProvider(language);\nconst result = provider.extract(filePath, content, tree, cursor);\n```\n\n这种架构让每种语言用最适合其语法的解析逻辑，保持代码清晰。",
+      "en": "Language-aware providers extract symbols using the most appropriate strategy for each language."
+    },
+    {
+      "lines": "200-300",
+      "type": "section",
+      "zh": "【框架检测】\n解析器从 AST 中自动检测使用的框架和工具：\n\n检测的框架：\n- **Next.js**: 检测 `pages/`/`app/` 目录\n- **React**: 检测 JSX/TSX 文件\n- **Express**: 检测 `app.use()`/`router`\n- **Prisma/Supabase**: ORM 查询提取\n\n```typescript\n// ORM 查询正则提取\nconst ormQueries = extractORMQueries(content);\n```\n\n框架检测影响：\n- 路由提取的准确性\n- API 端点识别的完整性\n- 工具定义的识别",
+      "en": "Framework detection identifies Next.js, React, Express, Prisma from AST patterns."
+    },
+    {
+      "lines": "300-400",
+      "type": "section",
+      "zh": "【字段元数据提取】\n为每个字段提取丰富的元数据：\n\n```typescript\n{\n  visibility: 'public' | 'private' | 'protected' | 'readonly',\n  isStatic: boolean,\n  isReadonly: boolean,\n  declaredType?: string,\n  hasGetter?: boolean,\n  hasSetter?: boolean\n}\n```\n\n这些元数据用于：\n- 依赖分析（哪些字段被访问）\n- 影响范围分析（修改字段的影响）\n- API 契约分析（哪些字段是公开的）",
+      "en": "Field metadata extraction captures visibility, static/readonly flags, and declared types."
+    }
+  ]
+}

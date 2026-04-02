@@ -1,6 +1,6 @@
 # 注解编写指南
 
-本文档说明如何为 Claude Code 源码编写中文注解。
+本文档说明如何为源码编写中文注解。
 
 ## 注解文件位置
 
@@ -101,9 +101,10 @@ annotations/
 
 ```json
 {
-  "lines": "151-170",
-  "type": "section",
-  "zh": "【Thinking 块规则】\nClaude Code 的 extended thinking 功能有三条严格规则：\n1. 包含 thinking/redacted_thinking 块的消息必须满足 max_thinking_length > 0\n2. thinking 块不能是消息的最后一个 content 块\n3. thinking 块必须在整个 assistant trajectory 中保留\n\n这确保 Claude 的思维过程被正确存储和传输。"
+  "lines": "50-80",
+  "type": "function",
+  "zh": "【函数 — 参数校验】\n该函数对输入参数进行了三层校验：\n1. 类型检查（type guard）\n2. 边界检查（范围/长度限制）\n3. 空值检查（null/undefined 防护）\n\n这种防御式编程确保下游逻辑不会因脏数据而崩溃。",
+  "code": "function validateInput(input: unknown): ValidatedInput { ... }"
 }
 ```
 
@@ -121,14 +122,14 @@ annotations/
 3. 运行本地验证：
    ```bash
    # 验证 JSON 格式
-   node scripts/validate-annotations.js
+   node scripts/validate-annotations.mjs
    ```
 4. 提交 PR，标题格式：`docs: annotate src/xxx.ts (Tier X)`
 
 ## Tier 分层原则
 
 ### Tier 1 — 核心层（优先注解）
-最核心的文件，理解这 10 个文件即可掌握 Claude Code 80% 的设计理念。
+最核心的文件，理解这 10 个文件即可掌握代码仓库 80% 的设计理念。
 
 ### Tier 2 — 通信层
 API 通信、上下文管理相关的文件。

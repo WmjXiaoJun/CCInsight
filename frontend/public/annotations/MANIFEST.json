@@ -1,0 +1,80 @@
+{
+  "version": "0.1.0",
+  "sourceRepository": "CCInsight Backend",
+  "annotationDate": "2026-04-02",
+  "tiers": [
+    {
+      "tier": 1,
+      "name": "核心层",
+      "nameEn": "Core Layer",
+      "description": "系统核心引擎 — CLI 入口、HTTP API、分析管道。理解这层即可掌握 CCInsight 的整体设计理念。",
+      "color": "#ef4444",
+      "priority": 1
+    },
+    {
+      "tier": 2,
+      "name": "通信层",
+      "nameEn": "Communication Layer",
+      "description": "MCP 协议服务、搜索服务 — CCInsight 与外部工具（Cursor、VSCode）通信的桥梁。",
+      "color": "#f97316",
+      "priority": 2
+    },
+    {
+      "tier": 3,
+      "name": "命令层",
+      "nameEn": "Command Layer",
+      "description": "各 CLI 子命令实现 — setup/wiki/serve 等独立命令的具体逻辑。",
+      "color": "#eab308",
+      "priority": 3
+    },
+    {
+      "tier": 4,
+      "name": "工具层",
+      "nameEn": "Utility Layer",
+      "description": "底层工具模块 — 代码解析器、嵌入向量生成、图数据库适配器、Wiki 生成器等。",
+      "color": "#22c55e",
+      "priority": 4
+    }
+  ],
+  "files": [
+    { "tier": 1, "path": "src/cli/index.ts", "priority": 1, "status": "annotated", "description": "CLI 入口 — 命令注册与分发" },
+    { "tier": 1, "path": "src/server/api.ts", "priority": 1, "status": "annotated", "description": "HTTP API — 所有 REST 和 SSE 端点" },
+    { "tier": 1, "path": "src/server/analyze-job.ts", "priority": 2, "status": "annotated", "description": "分析任务调度 — 队列管理、状态追踪" },
+    { "tier": 1, "path": "src/server/git-clone.ts", "priority": 3, "status": "annotated", "description": "Git 克隆/更新逻辑" },
+    { "tier": 1, "path": "src/core/ingestion/pipeline.ts", "priority": 1, "status": "annotated", "description": "分析管道 — 协调所有解析和索引步骤" },
+    { "tier": 1, "path": "src/core/ingestion/parsing-processor.ts", "priority": 2, "status": "annotated", "description": "代码解析器 — Tree-sitter AST 提取" },
+    { "tier": 1, "path": "src/core/ingestion/call-processor.ts", "priority": 3, "status": "pending", "description": "调用关系处理 — 函数调用、导入关系提取" },
+    { "tier": 1, "path": "src/mcp/server.ts", "priority": 1, "status": "annotated", "description": "MCP 服务器 — stdio 传输、工具注册" },
+    { "tier": 1, "path": "src/mcp/tools.ts", "priority": 2, "status": "annotated", "description": "MCP 工具定义 — 9 个核心工具实现" },
+    { "tier": 1, "path": "src/mcp/resources.ts", "priority": 3, "status": "pending", "description": "MCP 资源定义 — 仓库上下文资源" },
+    { "tier": 2, "path": "src/core/lbug/lbug-adapter.ts", "priority": 1, "status": "annotated", "description": "图数据库适配器 — SQLite 与 Cypher 查询" },
+    { "tier": 2, "path": "src/core/search/bm25-index.ts", "priority": 2, "status": "annotated", "description": "BM25 全文搜索 — 词频逆文档频率索引" },
+    { "tier": 2, "path": "src/core/search/hybrid-search.ts", "priority": 3, "status": "annotated", "description": "混合搜索 — BM25 + 语义嵌入融合" },
+    { "tier": 2, "path": "src/core/embeddings/embedder.ts", "priority": 1, "status": "annotated", "description": "向量嵌入生成 — ONNX 本地推理" },
+    { "tier": 2, "path": "src/core/wiki/generator.ts", "priority": 2, "status": "annotated", "description": "Wiki 生成器 — 从图谱数据生成架构文档" },
+    { "tier": 2, "path": "src/storage/repo-manager.ts", "priority": 3, "status": "pending", "description": "仓库管理器 — 索引存储与全局注册" },
+    { "tier": 3, "path": "src/cli/analyze.ts", "priority": 1, "status": "annotated", "description": "analyze 命令 — 完整仓库分析" },
+    { "tier": 3, "path": "src/cli/setup.ts", "priority": 2, "status": "annotated", "description": "setup 命令 — MCP 配置与 Hook 安装" },
+    { "tier": 3, "path": "src/cli/serve.ts", "priority": 2, "status": "annotated", "description": "serve 命令 — 启动 HTTP API 服务器" },
+    { "tier": 3, "path": "src/cli/wiki.ts", "priority": 3, "status": "annotated", "description": "wiki 命令 — 生成架构文档" },
+    { "tier": 3, "path": "src/cli/tool.ts", "priority": 3, "status": "annotated", "description": "tool 子命令 — query/context/impact" },
+    { "tier": 4, "path": "src/core/ingestion/structure-processor.ts", "priority": 1, "status": "pending", "description": "结构提取器 — 函数/类/变量定义" },
+    { "tier": 4, "path": "src/core/ingestion/import-processor.ts", "priority": 2, "status": "pending", "description": "导入处理器 — 依赖关系图" },
+    { "tier": 4, "path": "src/core/ingestion/process-processor.ts", "priority": 3, "status": "pending", "description": "执行流处理 — 提取调用链路" },
+    { "tier": 4, "path": "src/core/ingestion/community-processor.ts", "priority": 3, "status": "pending", "description": "社区检测 — Leiden 聚类算法" },
+    { "tier": 4, "path": "src/core/ingestion/call-routing.ts", "priority": 2, "status": "pending", "description": "路由提取 — API 路径映射分析" },
+    { "tier": 4, "path": "src/core/tree-sitter/parser-loader.ts", "priority": 1, "status": "pending", "description": "Tree-sitter 解析器加载器" },
+    { "tier": 4, "path": "src/storage/git.ts", "priority": 2, "status": "pending", "description": "Git 工具 — diff/blame/log 分析" },
+    { "tier": 4, "path": "src/lib/utils.ts", "priority": 3, "status": "pending", "description": "通用工具函数" }
+  ],
+  "statistics": {
+    "totalFiles": 31,
+    "totalTiers": 4,
+    "coverage": {
+      "tier1": { "total": 11, "annotated": 9 },
+      "tier2": { "total": 6, "annotated": 6 },
+      "tier3": { "total": 5, "annotated": 5 },
+      "tier4": { "total": 9, "annotated": 0 }
+    }
+  }
+}

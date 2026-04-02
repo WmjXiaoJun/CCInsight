@@ -1,0 +1,6 @@
+{
+  "path": "src/lib/utils.ts",
+  "tier": 4,
+  "description": "通用工具函数 — 提供路径处理、JSON 操作、进程管理等通用能力。",
+  "annotations": []
+}

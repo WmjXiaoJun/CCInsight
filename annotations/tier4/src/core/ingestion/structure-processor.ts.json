@@ -1,0 +1,6 @@
+{
+  "path": "src/core/ingestion/structure-processor.ts",
+  "tier": 4,
+  "description": "结构提取器 — 从 Tree-sitter AST 中提取函数、类、变量等代码结构定义。",
+  "annotations": []
+}

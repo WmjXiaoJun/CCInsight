@@ -1,0 +1,6 @@
+{
+  "path": "src/core/ingestion/import-processor.ts",
+  "tier": 4,
+  "description": "导入处理器 — 解析 import/export 语句，构建模块依赖关系图。",
+  "annotations": []
+}

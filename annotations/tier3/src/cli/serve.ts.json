@@ -1,0 +1,19 @@
+{
+  "path": "src/cli/serve.ts",
+  "tier": 3,
+  "description": "serve 命令 — 启动 HTTP API 服务器（port 4747），是前端浏览器的后端连接目标。",
+  "annotations": [
+    {
+      "lines": "1-50",
+      "type": "section",
+      "zh": "【薄封装设计】\nserve 命令是 `createServer()` 的薄封装：\n\n```typescript\nexport async function createServer(port = 4747, host = '127.0.0.1') {\n  const app = express();\n  // ... register routes\n  return app.listen(port, host);\n}\n```\n\n```typescript\n// serve.ts\ncreateServer(port, host).catch(console.error);\n```\n\n设计意图：\n- API 服务器逻辑全部在 `api.ts`\n- serve.ts 只负责入口参数解析\n- 方便其他模块（如 analyze）直接调用 `createServer()`",
+      "en": "Thin wrapper delegates to createServer() — allows other modules to embed the HTTP server directly."
+    },
+    {
+      "lines": "50-100",
+      "type": "section",
+      "zh": "【默认绑定 127.0.0.1】\n服务器默认只监听本地回环地址：\n\n```typescript\nconst host = '127.0.0.1';  // 仅本机访问\n```\n\n安全考量：\n- API 服务器读写本地 `.ccinsight/` 数据库\n- 不应该暴露到公网\n- 用户需要远程访问时用 `--host 0.0.0.0` 显式开启\n\n```bash\nccinsight serve --host 0.0.0.0  # 监听所有网卡（谨慎使用）\n```",
+      "en": "Binds to 127.0.0.1 by default for security. Use --host to expose to other machines."
+    }
+  ]
+}

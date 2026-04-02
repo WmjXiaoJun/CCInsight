@@ -1,0 +1,25 @@
+{
+  "path": "src/core/search/hybrid-search.ts",
+  "tier": 2,
+  "description": "混合搜索 — 融合 BM25（关键词）和语义嵌入（向量相似度）两种搜索结果。",
+  "annotations": [
+    {
+      "lines": "1-50",
+      "type": "section",
+      "zh": "【RRF 融合算法】\nReciprocal Rank Fusion（倒数排名融合）是混合搜索的核心：\n\n```typescript\nfunction mergeWithRRF(results, k = 60) {\n  const rrfScores = new Map();\n  for (const r of results) {\n    const rrf = 1 / (k + r.rank);\n    rrfScores[r.filePath] = (rrfScores[r.filePath] || 0) + rrf;\n  }\n  return sortByScore(rrfScores);\n}\n```\n\nk=60 的含义：\n- 排名越靠前，贡献的分数越高\n- k=60 意味着排名第 1 的结果贡献 ~0.016\n- 排名第 60 的结果贡献 ~0.008\n- 差距 2 倍，不会完全压倒另一搜索源",
+      "en": "RRF with k=60 balances results from BM25 and semantic search by reciprocal rank fusion."
+    },
+    {
+      "lines": "50-150",
+      "type": "section",
+      "zh": "【BM25 + 语义搜索融合】\n混合搜索同时执行两种搜索：\n\n```typescript\nconst [bm25Results, semanticResults] = await Promise.all([\n  searchFTS(query),     // 关键词匹配\n  embedAndSearch(query) // 语义相似度\n]);\n\nreturn mergeWithRRF([...bm25Results, ...semanticResults]);\n```\n\n融合结果特征：\n- BM25 命中的文件（精确匹配）排在前面\n- 语义相关的文件（相关但不含关键词）也能被召回\n- 两者的分数叠加得到最终排名\n\n这解决了关键词搜索的 vocabulary mismatch 问题：用户搜 `auth token` 可能匹配不到 `bearerCredential`（语义相关但词不匹配）。",
+      "en": "Hybrid search solves vocabulary mismatch by combining exact keyword matching with semantic similarity."
+    },
+    {
+      "lines": "150-250",
+      "type": "section",
+      "zh": "【语义搜索不可用时降级】\n如果嵌入向量未生成，混合搜索自动降级为纯 BM25：\n\n```typescript\nif (!await isHybridSearchReady()) {\n  return searchFTSFromLbug(query, limit);\n}\nreturn hybridSearch(query, limit);\n```\n\n设计意图：\n- 嵌入生成是可选的（`--no-embeddings` 跳过）\n- 没有嵌入时仍能进行关键词搜索\n- 用户体验不因嵌入缺失而中断\n\n这是一种优雅降级（Graceful Degradation）策略。",
+      "en": "Graceful degradation to pure BM25 when embeddings are not available."
+    }
+  ]
+}

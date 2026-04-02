@@ -1,0 +1,548 @@
+[
+  {
+    "path": "src/cli/index.ts",
+    "tier": 1,
+    "description": "CLI 入口 — 使用 Commander.js 注册所有命令，提供统一的命令行操作界面。",
+    "annotations": [
+      {
+        "lines": "1-50",
+        "type": "section",
+        "zh": "【导入与懒加载】\n使用 `createLazyAction()` 包装所有命令导入，实现懒加载模式。\n\n优势：\n- 主程序启动时不加载任何命令模块\n- 只有用户真正执行某个命令时，才加载对应模块\n- 节省内存，加快 `ccinsight --help` 响应速度\n- 避免大型依赖（如 ONNX）在主进程加载",
+        "en": "Lazy action pattern defers all command imports until invocation."
+      },
+      {
+        "lines": "50-100",
+        "type": "section",
+        "zh": "【命令注册】\n使用 Commander.js 的链式 API 注册命令。每个命令有独立的 `.action()` 处理器。\n\n关键设计：\n- `--force`/`-f` 标志让 `analyze` 命令强制重新索引\n- `--embeddings` 让 `analyze` 跳过嵌入向量生成\n- `--verbose` 开启详细日志输出\n- `--skipAgentsMd` 控制是否跳过 AGENTS.md 生成",
+        "en": "Commander.js chain API for command registration."
+      },
+      {
+        "lines": "100-152",
+        "type": "section",
+        "zh": "【全局参数处理】\n在所有命令之前注册 `--repo` 全局选项，通过 `visor` 变量让每个命令都能访问目标仓库路径。\n\n注意：\n- `serve` 命令不需要 `--repo`，因为它启动服务器而非索引\n- `--repo` 支持相对路径（相对于当前工作目录）\n- 未指定 `--repo` 时各命令行为不同（serve 不报错，analyze 需要参数）",
+        "en": "Global `--repo` option shared across all commands via visor pattern."
+      }
+    ]
+  },
+  {
+    "path": "src/core/ingestion/parsing-processor.ts",
+    "tier": 1,
+    "description": "代码解析器 — 基于 Tree-sitter 的多语言 AST 解析，提取符号、调用、导入、路由等信息。",
+    "annotations": [
+      {
+        "lines": "1-100",
+        "type": "section",
+        "zh": "【工作线程与顺序回退】\n解析器有两个执行路径：\n\n1. **工作线程池**（大型仓库）：\n   - 适用条件：文件数 ≥15 或总大小 ≥512KB\n   - 使用 Node.js `worker_threads` 并行解析\n   - 每个工作线程独立加载 Tree-sitter 解析器\n\n2. **顺序执行**（小型仓库）：\n   - 适用条件：不满足上述条件\n   - 直接在主线程解析，无需进程通信开销\n   - 有 AST 缓存（50 棵树）加速重复解析\n\n设计决策：大型仓库用并行，小型仓库用顺序，平衡了 CPU 利用率和启动开销。",
+        "en": "Worker pool for large repos, sequential fallback for small repos — balances CPU utilization and startup overhead."
+      },
+      {
+        "lines": "100-200",
+        "type": "section",
+        "zh": "【语言感知解析器】\n通过 `getProvider(language)` 获取语言特定的解析提供者：\n\n每种语言有自己的提取器实现：\n- **TypeScript/JavaScript**: 类型推断、装饰器路由\n- **Python**: 命名绑定、导入别名解析\n- **Rust**: Trait/Impl 结构\n- **Go**: 命名绑定、接口嵌入\n\n```typescript\nconst provider = getProvider(language);\nconst result = provider.extract(filePath, content, tree, cursor);\n```\n\n这种架构让每种语言用最适合其语法的解析逻辑，保持代码清晰。",
+        "en": "Language-aware providers extract symbols using the most appropriate strategy for each language."
+      },
+      {
+        "lines": "200-300",
+        "type": "section",
+        "zh": "【框架检测】\n解析器从 AST 中自动检测使用的框架和工具：\n\n检测的框架：\n- **Next.js**: 检测 `pages/`/`app/` 目录\n- **React**: 检测 JSX/TSX 文件\n- **Express**: 检测 `app.use()`/`router`\n- **Prisma/Supabase**: ORM 查询提取\n\n```typescript\n// ORM 查询正则提取\nconst ormQueries = extractORMQueries(content);\n```\n\n框架检测影响：\n- 路由提取的准确性\n- API 端点识别的完整性\n- 工具定义的识别",
+        "en": "Framework detection identifies Next.js, React, Express, Prisma from AST patterns."
+      },
+      {
+        "lines": "300-400",
+        "type": "section",
+        "zh": "【字段元数据提取】\n为每个字段提取丰富的元数据：\n\n```typescript\n{\n  visibility: 'public' | 'private' | 'protected' | 'readonly',\n  isStatic: boolean,\n  isReadonly: boolean,\n  declaredType?: string,\n  hasGetter?: boolean,\n  hasSetter?: boolean\n}\n```\n\n这些元数据用于：\n- 依赖分析（哪些字段被访问）\n- 影响范围分析（修改字段的影响）\n- API 契约分析（哪些字段是公开的）",
+        "en": "Field metadata extraction captures visibility, static/readonly flags, and declared types."
+      }
+    ]
+  },
+  {
+    "path": "src/core/ingestion/pipeline.ts",
+    "tier": 1,
+    "description": "分析管道协调器 — 14 个阶段流水线，从文件扫描到图谱构建，全程进度回调。",
+    "annotations": [
+      {
+        "lines": "1-100",
+        "type": "section",
+        "zh": "【14 阶段流水线】\nCCInsight 的分析管道分 14 个阶段，每阶段可独立报告进度：\n\n| 阶段 | 名称 | 说明 |\n|------|------|------|\n| 1-2 | 扫描与结构 | 构建文件和文件夹节点 |\n| 3-4 | 解析与导入 | Tree-sitter 解析，分块并行 |\n| 5 | 调用关系 | 函数调用和导入关系 |\n| 6 | 继承关系 | MRO 解析 |\n| 7 | 社区检测 | Leiden 聚类 |\n| 8 | 流程提取 | 执行链路分析 |\n| 14 | 跨文件绑定传播 | 类型推断传播 |\n\n关键设计：阶段间可以传递状态，前置阶段的输出是后续阶段的输入。",
+        "en": "14-phase pipeline orchestrates scanning, parsing, analysis, and graph construction."
+      },
+      {
+        "lines": "200-300",
+        "type": "section",
+        "zh": "【20MB 分块策略】\n源文件按 20MB 分块，每块使用独立工作线程并行解析：\n\n为什么是 20MB？\n- 单个文件超过 20MB 时，Tree-sitter AST 内存占用可能达到 400-800MB\n- 20MB 边界让内存峰值可控\n- 小文件合并到同一块，减少进程创建开销\n\n大型仓库（≥15 文件或 ≥512KB）启用工作线程池，小型仓库顺序执行。",
+        "en": "20MB chunk budget limits peak memory usage during parallel Tree-sitter parsing."
+      },
+      {
+        "lines": "400-500",
+        "type": "section",
+        "zh": "【Kahn 算法拓扑排序】\n使用拓扑排序解决循环导入问题：\n\n```typescript\nconst inDegree = new Map<string, number>();\n// ... 构建入度图\n// ... BFS 拓扑排序\n```\n\n设计意图：\n- 循环导入在大型项目中很常见\n- 通过跳过循环边找到可行的处理顺序\n- 保证类型绑定从上到下正确传播",
+        "en": "Kahn's algorithm resolves circular import dependencies for type binding propagation."
+      },
+      {
+        "lines": "600-700",
+        "type": "section",
+        "zh": "【跳过阈值 3%】\n跨文件类型绑定传播有跳过机制：如果受影响的文件占比 < 3%，则跳过该轮传播：\n\n```typescript\nif (benefitedFiles.size / totalFiles < CROSS_FILE_SKIP_THRESHOLD) {\n  break;\n}\n```\n\n理由：\n- 跨文件传播是 O(n²) 级别的计算\n- 收益很小时不值得消耗资源\n- 3% 阈值在实践中平衡了准确性和性能",
+        "en": "3% skip threshold avoids expensive cross-file propagation when benefits are marginal."
+      }
+    ]
+  },
+  {
+    "path": "src/mcp/server.ts",
+    "tier": 1,
+    "description": "MCP 服务器 — stdio 传输，AI 工具通过标准输入输出与 CCInsight 通信。",
+    "annotations": [
+      {
+        "lines": "1-100",
+        "type": "section",
+        "zh": "【stdio 传输协议】\nMCP 服务器通过 stdin/stdout 与 AI 工具通信：\n\n通信模式：\n1. AI 工具（Cursor/Claude Code）启动 CCInsight 子进程\n2. 通过 stdin 发送 JSON-RPC 请求\n3. CCInsight 通过 stdout 返回 JSON-RPC 响应\n4. 事件通过 stdout 推送（SSE-like）\n\n这种设计优势：\n- **零配置**：无需端口监听、防火墙\n- **安全**：子进程隔离，无网络暴露\n- **便携**：任何支持进程调用的环境都能用",
+        "en": "stdio transport enables zero-config communication between AI tools and CCInsight via stdin/stdout JSON-RPC."
+      },
+      {
+        "lines": "100-200",
+        "type": "section",
+        "zh": "【多仓库支持】\nMCP 服务器可同时管理多个索引仓库：\n\n```typescript\nconst backend = new LocalBackend(repoManager, ...);\n```\n\n工作原理：\n- 每个仓库有独立的 `.ccinsight/` 索引目录\n- MCP 工具默认操作当前仓库\n- 可通过工具参数指定其他仓库\n- 工具响应中附加 next-step hints，引导 AI 下一步操作",
+        "en": "Multi-repo support allows the MCP server to manage multiple indexed repositories simultaneously."
+      },
+      {
+        "lines": "200-337",
+        "type": "section",
+        "zh": "【Next-Step Hints】\nMCP 工具响应中附加推理提示，帮助 AI 决定下一步：\n\n```typescript\n{\n  nextStepHint: \"查询 symbol 后，可以运行 context 获取详细信息\"\n}\n```\n\n设计意图：\n- AI 不需要记住所有工具的使用顺序\n- 每个工具告诉 AI 接下来该做什么\n- 形成自然的问答式工作流\n\n支持的工具组合：\n- `list_repos` → `query`\n- `query` → `context`\n- `context` → `impact`\n- `detect_changes` → `impact`",
+        "en": "Next-step hints guide AI agents through the optimal tool usage sequence."
+      },
+      {
+        "lines": "337-400",
+        "type": "section",
+        "zh": "【错误处理策略】\nMCP 服务器对不同错误类型有不同处理：\n\n| 错误类型 | 处理策略 |\n|---------|---------|\n| `uncaughtException` | 致命错误，退出进程（exit code 1） |\n| `unhandledRejection` | 记录到 stderr，保持运行 |\n| `stdin.on('end')` | 优雅关闭 |\n| `stdin.on('error')` | 优雅关闭 |\n\n设计决策：\n- `unhandledRejection` 不致命，因为某些库（LadybugDB）在关闭时会产生未处理拒绝\n- `uncaughtException` 必须退出，防止进程处于不确定状态\n- availability-first：即使有错误也尽量保持服务可用",
+        "en": "Fatal vs non-fatal error distinction: uncaughtException exits, unhandledRejection logs and continues."
+      }
+    ]
+  },
+  {
+    "path": "src/mcp/tools.ts",
+    "tier": 1,
+    "description": "MCP 工具定义 — 9 个核心工具，将图谱查询能力暴露给 AI 代理。",
+    "annotations": [
+      {
+        "lines": "1-50",
+        "type": "section",
+        "zh": "【工具注册架构】\n每个 MCP 工具通过 `Tool` 接口定义，包含：\n\n```typescript\ninterface Tool {\n  name: string;        // 工具名，AI 通过 name 调用\n  description: string;  // 描述，AI 决定何时使用\n  inputSchema: {       // JSON Schema，输入参数校验\n    type: 'object',\n    properties: {...}\n  };\n  repo?: string;       // 可选仓库参数\n}\n```\n\nAI（Cursor/Claude Code）读取这些描述后，可以自主决定调用哪个工具。\n\n关键设计：描述即文档。描述越详细，AI 使用越准确。",
+        "en": "Tools are self-documenting via JSON Schema — AI reads descriptions to decide when to invoke each tool."
+      },
+      {
+        "lines": "50-150",
+        "type": "section",
+        "zh": "【图谱节点类型】\nCCInsight 的知识图谱支持以下节点类型：\n\n| 类型 | 说明 |\n|------|------|\n| `File` | 源文件 |\n| `Folder` | 文件夹 |\n| `Function` | 函数 |\n| `Class` | 类 |\n| `Interface` | 接口 |\n| `Method` | 类方法 |\n| `Struct` | 结构体（Rust/C） |\n| `Enum` | 枚举 |\n| `Trait` | Trait（Rust） |\n| `Union` | 联合类型 |\n| `Community` | 功能社区（Leiden 聚类） |\n| `Process` | 执行流程 |\n| `Route` | API 路由 |\n| `Tool` | MCP/RPC 工具定义 |",
+        "en": "The knowledge graph supports 14+ node types across TypeScript, Python, Rust, Go, Java, C#, and more."
+      },
+      {
+        "lines": "150-250",
+        "type": "section",
+        "zh": "【关系类型】\n节点之间的关系通过以下边类型建模：\n\n| 边类型 | 说明 |\n|--------|------|\n| `CONTAINS` | 文件包含关系 |\n| `DEFINES` | 定义关系 |\n| `CALLS` | 函数调用 |\n| `IMPORTS` | 导入依赖 |\n| `EXTENDS` | 继承关系 |\n| `IMPLEMENTS` | 接口实现 |\n| `HAS_METHOD` | 类包含方法 |\n| `HAS_PROPERTY` | 类包含属性 |\n| `ACCESSES` | 属性访问 |\n| `OVERRIDES` | 方法重写 |\n| `STEP_IN_PROCESS` | 执行流步骤 |\n| `HANDLES_ROUTE` | 路由处理 |\n| `FETCHES` | HTTP 调用 |\n| `HANDLES_TOOL` | 工具定义 |",
+        "en": "13 edge types model the complete dependency and relationship graph of a codebase."
+      },
+      {
+        "lines": "250-381",
+        "type": "section",
+        "zh": "【query 工具 — 执行流搜索】\n最核心的工具，允许用自然语言搜索知识图谱：\n\n```json\n{\n  \"query\": \"用户认证的处理流程\",\n  \"limit\": 10\n}\n```\n\n工作原理：\n1. 将自然语言 query 转换为 Cypher 图查询\n2. 在 Process 节点和 STEP_IN_PROCESS 边上搜索\n3. 返回匹配的执行链路\n4. 附带 confidence 置信度评分\n\n返回格式包含：\n- 流程名称和节点列表\n- 每步的调用文件\n- overall_confidence 总分",
+        "en": "The `query` tool converts natural language to Cypher queries against the Process subgraph."
+      }
+    ]
+  },
+  {
+    "path": "src/server/analyze-job.ts",
+    "tier": 1,
+    "description": "分析任务调度器 — 内存 Map 追踪任务状态，单槽并发，同仓库去重，TTL 自动清理。",
+    "annotations": [
+      {
+        "lines": "1-50",
+        "type": "section",
+        "zh": "【任务状态机】\n`AnalyzeJob` 状态流转：\n\n`queued` → `cloning` → `analyzing` → `loading` → `complete`\n                                         ↓\n                                      `failed`\n\n设计意图：\n- `cloning` 阶段单独拆分，克隆仓库耗时独立追踪\n- `loading` 阶段将索引写入 LadybugDB\n- 任何阶段失败都进入 `failed` 状态",
+        "en": "Job state machine: queued → cloning → analyzing → loading → complete/failed."
+      },
+      {
+        "lines": "50-150",
+        "type": "section",
+        "zh": "【单槽并发策略】\n同时只运行一个分析任务，新任务在已有任务运行时进入排队：\n\n```typescript\nif (this.activeJobId !== null) {\n  throw new Error('Another analysis is already running');\n}\n```\n\n限制理由：\n- 分析任务消耗大量内存（子进程 8GB 堆）\n- LadybugDB 写入事务互斥\n- 避免多个任务竞争磁盘 I/O",
+        "en": "Single-slot concurrency prevents memory pressure and DB write conflicts."
+      },
+      {
+        "lines": "150-250",
+        "type": "section",
+        "zh": "【同仓库去重】\n同一仓库的重复分析请求返回已有的任务 ID，而非创建新任务：\n\n```typescript\nfor (const job of this.jobs.values()) {\n  if (job.repoUrl === url && job.status !== 'failed') {\n    return { jobId: job.id, existing: true };\n  }\n}\n```\n\n效果：防止用户多次点击「分析」产生重复任务。",
+        "en": "Same-repo deduplication prevents duplicate analysis jobs."
+      },
+      {
+        "lines": "250-350",
+        "type": "section",
+        "zh": "【TTL 自动清理】\n每 5 分钟清理一次超过 60 分钟的过期任务，防止内存泄漏：\n\n```typescript\nsetInterval(() => {\n  const cutoff = Date.now() - JOB_TTL_MS;\n  for (const [id, job] of this.jobs) {\n    if (job.completedAt && job.completedAt < cutoff) {\n      this.jobs.delete(id);\n    }\n  }\n}, CLEANUP_INTERVAL_MS);\n```\n\n注意：只清理已完成的任务，运行中任务不受影响。",
+        "en": "TTL-based cleanup removes stale jobs every 5 minutes to prevent memory leaks."
+      }
+    ]
+  },
+  {
+    "path": "src/server/api.ts",
+    "tier": 1,
+    "description": "HTTP API — Express 服务器，注册所有 REST 和 SSE 端点，供前端浏览器客户端和 MCP 远程调用。",
+    "annotations": [
+      {
+        "lines": "1-50",
+        "type": "section",
+        "zh": "【CORS 策略】\n`isAllowedOrigin()` 函数白名单控制跨域访问：\n\n允许的来源：\n1. `http://localhost:*` / `http://127.0.0.1:*` — 本地开发\n2. RFC 1918 私网段 — 10.x.x.x、172.16-31.x.x、192.168.x.x\n3. 生产域名 — `ccinsight.vercel.app`\n\n安全限制：只允许 http://，禁止 ftp://、file:// 等危险协议。",
+        "en": "CORS whitelist restricts cross-origin access to localhost and private networks."
+      },
+      {
+        "lines": "100-200",
+        "type": "section",
+        "zh": "【工作线程管理】\n分析任务通过 `fork()` 启动子进程执行，8GB 堆内存限制防止主进程 OOM：\n\n关键参数：\n- `--max-old-space-size=8192` — V8 堆内存上限\n- 父进程捕获子进程退出事件，维护任务状态\n- 30 分钟超时机制，自动终止超时任务",
+        "en": "Child process isolation with 8GB heap limit prevents OOM in the main server."
+      },
+      {
+        "lines": "300-400",
+        "type": "section",
+        "zh": "【SSE 流式推送】\n分析进度通过 Server-Sent Events 实时推送，前端建立长连接订阅进度事件。\n\n事件类型：\n- `progress` — 当前阶段和百分比\n- `nodes` — 节点批次（大量节点时分批推送）\n- `complete` / `failed` — 终止事件",
+        "en": "Server-Sent Events stream real-time analysis progress to the browser client."
+      },
+      {
+        "lines": "500-600",
+        "type": "section",
+        "zh": "【LLM 代理】\n`/api/llm/chat` 代理前端 LLM 请求，解决浏览器 CORS 限制：\n\n流程：\n1. 前端发送请求到 `/api/llm/chat`\n2. 后端转发到 LLM 提供商（OpenAI/Gemini 等）\n3. 流式响应实时推送回前端\n\n优势：无需浏览器配置 CORS，后端统一管理 API Key。",
+        "en": "LLM proxy routes browser requests to LLM providers, bypassing CORS restrictions."
+      },
+      {
+        "lines": "700-800",
+        "type": "section",
+        "zh": "【优雅关闭】\n服务器关闭时按顺序释放资源：\n\n1. 关闭 Express HTTP 服务器\n2. 停止 JobManager 清理定时器\n3. 关闭 MCP HTTP 端点\n4. 关闭 LadybugDB 连接\n\n使用 `process.on('SIGTERM/SIGINT')` 捕获终止信号，确保重启时无僵尸连接。",
+        "en": "Graceful shutdown releases resources in dependency order on SIGTERM/SIGINT."
+      }
+    ]
+  },
+  {
+    "path": "src/server/git-clone.ts",
+    "tier": 1,
+    "description": "Git 克隆与更新 — 浅克隆仓库到 ~/.ccinsight/repos/，支持断点续传。",
+    "annotations": [
+      {
+        "lines": "1-50",
+        "type": "section",
+        "zh": "【SSRF 防护】\n`validateGitUrl()` 是最重要的安全函数，阻止服务器被用于攻击内网：\n\n禁止的地址类型：\n- localhost / 127.x.x.x / [::1]\n- 10.x.x.x（RFC 1918 企业内网）\n- 172.16-31.x.x（RFC 1918 私网）\n- 192.168.x.x（RFC 1918 私网）\n- 169.254.x.x（链路本地地址）\n- 0.x.x.x（当前网络）\n\n只允许 https:// 和 http:// 协议，阻止本地文件访问。",
+        "en": "SSRF protection blocks localhost and RFC 1918 private network addresses."
+      },
+      {
+        "lines": "50-120",
+        "type": "section",
+        "zh": "【浅克隆策略】\n使用 `--depth 1` 只克隆最新一次提交，大幅减少下载量和磁盘占用：\n\n```bash\ngit clone --depth 1 <url>\n```\n\n优势：\n- 下载量从完整历史（数百 MB）减少到最新快照（数十 MB）\n- 克隆时间从分钟级降到秒级\n- 足够进行代码结构分析（不需要历史）",
+        "en": "Shallow clone with `--depth 1` reduces download size and clone time."
+      },
+      {
+        "lines": "120-180",
+        "type": "section",
+        "zh": "【FF-only 拉取策略】\n更新已克隆仓库时使用 `git pull --ff-only`：\n\n```bash\ngit pull --ff-only\n```\n\n设计决策：\n- 如果本地有未合并的提交，pull 会失败而非创建 merge commit\n- 避免引入复杂的 merge 历史\n- 强制用户手动处理冲突，保证索引结果与 HEAD 一致",
+        "en": "Fast-forward only pull prevents unexpected merge commits in the cloned repo."
+      }
+    ]
+  },
+  {
+    "path": "src/core/embeddings/embedder.ts",
+    "tier": 2,
+    "description": "向量嵌入生成器 — 使用 transformers.js 在本地运行 ONNX 模型生成代码语义向量。",
+    "annotations": [
+      {
+        "lines": "1-50",
+        "type": "section",
+        "zh": "【默认模型 snowflake-arctic-embed-xs】\nCCInsight 使用的小型高效嵌入模型：\n\n| 指标 | 数值 |\n|------|------|\n| 参数 | 22M |\n| 向量维度 | 384 |\n| 模型大小 | ~90MB |\n| 用途 | 短文本嵌入（代码片段、函数名） |\n\n选择理由：\n- 足够小的模型可在浏览器边运行（WebGPU）\n- 384 维度在相似度计算中速度够快\n- 专为代码优化（不是通用文本模型）",
+        "en": "snowflake-arctic-embed-xs: 22M params, 384 dims, ~90MB — optimized for code snippets."
+      },
+      {
+        "lines": "50-150",
+        "type": "section",
+        "zh": "【GPU 设备选择策略】\nONNX Runtime 按以下顺序选择执行设备：\n\n1. **Windows**: DirectML (DirectX 12) — GPU 加速\n   ```\n   Ort.DML.XXX.dll\n   ```\n\n2. **Linux CUDA**: 检查 `ldconfig -p | grep libcuda.so`\n   ```\n   /usr/local/cuda/lib64/libcuda.so.1\n   ```\n\n3. **CPU 回退**: 无 GPU 时使用 CPU\n\n```typescript\nconst session = await ort.InferenceSession.create(modelPath, {\n  executionProviders: ['cuda', 'dml', 'cpu']\n});\n```\n\nWindows 上 DirectML 是最常用的 GPU 路径，因为不需要 CUDA 安装。",
+        "en": "Device priority: Windows DirectML → Linux CUDA → CPU fallback. DirectML works without NVIDIA drivers."
+      },
+      {
+        "lines": "150-250",
+        "type": "section",
+        "zh": "【单例模式】\n嵌入模型在进程中只加载一次：\n\n```typescript\nlet embedderInstance: Embedder | null = null;\n\nasync function initEmbedder() {\n  if (!embedderInstance) {\n    embedderInstance = new Embedder(modelConfig);\n    await embedderInstance.load();\n  }\n  return embedderInstance;\n}\n```\n\n为什么用单例？\n- 模型加载耗时（~2-5 秒）\n- 模型文件只读入内存一次\n- 多次调用共享内存\n- 避免 GPU 内存溢出",
+        "en": "Singleton pattern loads the ONNX model once per process to avoid repeated initialization overhead."
+      },
+      {
+        "lines": "250-350",
+        "type": "section",
+        "zh": "【HTTP 远程模式】\n嵌入计算可委托给远程服务器：\n\n```typescript\nif (config.baseUrl) {\n  return fetchFromEmbeddingServer(texts, config.baseUrl);\n}\nreturn embedLocally(texts);\n```\n\n适用场景：\n- 服务器端嵌入（Node.js 环境）\n- 共享 GPU 机器\n- 避免每个仓库重复加载模型\n\n本地模式（浏览器 WebGPU）：\n- 前端可直接在浏览器中生成嵌入\n- 不需要后端有 GPU\n- 适用于小规模仓库分析",
+        "en": "HTTP delegation mode allows a dedicated embedding server to handle vector generation for multiple repositories."
+      }
+    ]
+  },
+  {
+    "path": "src/core/lbug/lbug-adapter.ts",
+    "tier": 2,
+    "description": "图数据库适配器 — 封装 LadybugDB（SQLite 图数据库），提供 Cypher 查询、CSV 批量加载、全文搜索。",
+    "annotations": [
+      {
+        "lines": "1-100",
+        "type": "section",
+        "zh": "【会话锁机制】\nLadybugDB 是单写模式数据库，任意时刻只能有一个写事务。\n\n`withLbugDb()` 装饰器实现全局写锁：\n\n```typescript\nawait withLbugDb(async (db) => {\n  // 任意时刻只有一个写事务\n  await db.run('INSERT INTO ...');\n});\n```\n\n重试机制：\n- `DB_LOCK_RETRY_ATTEMPTS = 3`\n- 指数退避：500ms → 1000ms → 2000ms\n- BUSY 错误码表示数据库被其他连接占用\n\n这种设计保证了多连接访问时的数据一致性。",
+        "en": "Global write lock via promise chain prevents concurrent write transactions to LadybugDB."
+      },
+      {
+        "lines": "200-300",
+        "type": "section",
+        "zh": "【CSV 批量加载】\n数据写入分两步：\n\n1. **流式写 CSV**：\n   - 先将节点和边数据写入 CSV 文件\n   - CSV 比 JSON 更容易批量解析\n   - 边数据按 FROM→TO 标签对分割成多个 CSV\n\n2. **Bulk COPY**：\n   - 使用 LadybugDB 的 COPY 命令批量导入\n   - 比逐条 INSERT 快 100 倍以上\n\n```typescript\nawait db.copyFrom(csvPath, 'nodes');\n```\n\n回退策略：如果 COPY 失败，降级为逐条 INSERT。",
+        "en": "CSV bulk loading is ~100x faster than row-by-row INSERT. Failed COPY falls back to sequential inserts."
+      },
+      {
+        "lines": "400-500",
+        "type": "section",
+        "zh": "【RFC 4180 CSV 转义】\nLadybugDB 的 COPY 命令使用特殊转义规则：\n\n```typescript\nESCAPE='\"'  // 使用双引号转义，非反斜杠\n```\n\n为什么不用反斜杠？\n- 代码文件中大量使用 `\\`（Windows 路径、C++ 转义）\n- 反斜杠在 CSV 中会被误解\n- 双引号转义避免歧义\n\n```csv\nid,content,type\n\"node_1\",\"const x \\\\\\\\ y = 1\",\"Function\"\n```",
+        "en": "RFC 4180 CSV escaping uses double-quote, not backslash, because code files contain many backslashes."
+      },
+      {
+        "lines": "600-700",
+        "type": "section",
+        "zh": "【FTS 全文索引】\n`createFTSIndex()` 创建全文索引，支持关键词搜索：\n\n```typescript\nCREATE VIRTUAL TABLE nodes_fts USING fts5(\n  content,\n  tokenize='porter'\n);\n```\n\n使用 Porter 词干算法：\n- `running` → `run`\n- `developers` → `develop`\n\n这使得搜索 `develop` 能匹配 `developer`、`development` 等变体。",
+        "en": "FTS5 with Porter stemmer normalizes words to their root form for better keyword matching."
+      }
+    ]
+  },
+  {
+    "path": "src/core/search/bm25-index.ts",
+    "tier": 2,
+    "description": "BM25 全文搜索 — 基于词频和逆文档频率的关键词搜索，利用 LadybugDB 内置 FTS5 索引。",
+    "annotations": [
+      {
+        "lines": "1-50",
+        "type": "section",
+        "zh": "【BM25 算法原理】\nBM25 是 Elasticsearch、Solr 等搜索引擎的核心算法：\n\n```\nscore = IDF(qi) × (tf(qi,d) × (k+1))\n                      / (tf(qi,d) + k × (1-b + b × |d|/avgdl))\n```\n\n| 参数 | 说明 |\n|------|------|\n| `tf(qi,d)` | 词项 qi 在文档 d 中的出现次数 |\n| `IDF(qi)` | 逆文档频率，词越常见分数越低 |\n| `k` (~1.2-2.0) | 词频饱和参数 |\n| `b` (~0.75) | 文档长度归一化参数 |\n\n核心思想：词在文档中出现次数越多分数越高，但有上限（饱和）。",
+        "en": "BM25 (Best Matching 25) scores documents by term frequency with saturation and inverse document frequency."
+      },
+      {
+        "lines": "50-150",
+        "type": "section",
+        "zh": "【多表并行搜索】\nBM25 搜索同时查询多个节点表：\n\n```typescript\nconst tables = ['File', 'Function', 'Class', 'Method', 'Interface'];\nconst results = await Promise.all(\n  tables.map(t => searchTable(t, query, limit))\n);\n```\n\n为什么并行？\n- 各表的 FTS 索引互相独立\n- 并行查询减少总延迟\n- 结果按 filePath 合并，相同文件的分数累加\n\n合并策略：\n- 搜索结果按 filePath 分组\n- 同一文件的多个匹配累加 BM25 分数\n- 最终按总分排序",
+        "en": "Parallel multi-table search with score aggregation by filePath."
+      },
+      {
+        "lines": "150-250",
+        "type": "section",
+        "zh": "【始终读取磁盘】\n搜索永远直接从 FTS 索引读取，不使用缓存：\n\n```typescript\n// 每次搜索都读磁盘，不缓存结果\nconst results = await queryFTS(sql, params);\n```\n\n设计决策：\n- 代码仓库经常变化（用户修改代码）\n- 缓存会导致搜索结果与实际代码不同步\n- FTS 查询足够快（毫秒级），不需要缓存\n\n与嵌入向量搜索（需要预计算）形成对比：BM25 适合即时搜索，语义搜索适合探索性查询。",
+        "en": "Always reads from disk (no caching) to ensure search results stay in sync with the live codebase."
+      }
+    ]
+  },
+  {
+    "path": "src/core/search/hybrid-search.ts",
+    "tier": 2,
+    "description": "混合搜索 — 融合 BM25（关键词）和语义嵌入（向量相似度）两种搜索结果。",
+    "annotations": [
+      {
+        "lines": "1-50",
+        "type": "section",
+        "zh": "【RRF 融合算法】\nReciprocal Rank Fusion（倒数排名融合）是混合搜索的核心：\n\n```typescript\nfunction mergeWithRRF(results, k = 60) {\n  const rrfScores = new Map();\n  for (const r of results) {\n    const rrf = 1 / (k + r.rank);\n    rrfScores[r.filePath] = (rrfScores[r.filePath] || 0) + rrf;\n  }\n  return sortByScore(rrfScores);\n}\n```\n\nk=60 的含义：\n- 排名越靠前，贡献的分数越高\n- k=60 意味着排名第 1 的结果贡献 ~0.016\n- 排名第 60 的结果贡献 ~0.008\n- 差距 2 倍，不会完全压倒另一搜索源",
+        "en": "RRF with k=60 balances results from BM25 and semantic search by reciprocal rank fusion."
+      },
+      {
+        "lines": "50-150",
+        "type": "section",
+        "zh": "【BM25 + 语义搜索融合】\n混合搜索同时执行两种搜索：\n\n```typescript\nconst [bm25Results, semanticResults] = await Promise.all([\n  searchFTS(query),     // 关键词匹配\n  embedAndSearch(query) // 语义相似度\n]);\n\nreturn mergeWithRRF([...bm25Results, ...semanticResults]);\n```\n\n融合结果特征：\n- BM25 命中的文件（精确匹配）排在前面\n- 语义相关的文件（相关但不含关键词）也能被召回\n- 两者的分数叠加得到最终排名\n\n这解决了关键词搜索的 vocabulary mismatch 问题：用户搜 `auth token` 可能匹配不到 `bearerCredential`（语义相关但词不匹配）。",
+        "en": "Hybrid search solves vocabulary mismatch by combining exact keyword matching with semantic similarity."
+      },
+      {
+        "lines": "150-250",
+        "type": "section",
+        "zh": "【语义搜索不可用时降级】\n如果嵌入向量未生成，混合搜索自动降级为纯 BM25：\n\n```typescript\nif (!await isHybridSearchReady()) {\n  return searchFTSFromLbug(query, limit);\n}\nreturn hybridSearch(query, limit);\n```\n\n设计意图：\n- 嵌入生成是可选的（`--no-embeddings` 跳过）\n- 没有嵌入时仍能进行关键词搜索\n- 用户体验不因嵌入缺失而中断\n\n这是一种优雅降级（Graceful Degradation）策略。",
+        "en": "Graceful degradation to pure BM25 when embeddings are not available."
+      }
+    ]
+  },
+  {
+    "path": "src/core/wiki/generator.ts",
+    "tier": 2,
+    "description": "Wiki 生成器 — 从知识图谱自动生成架构文档，支持模块树构建、增量更新、并行生成。",
+    "annotations": [
+      {
+        "lines": "1-100",
+        "type": "section",
+        "zh": "【模块树自顶向下构建】\nWiki 生成的核心是构建模块树：\n\n```\n仓库\n├── 前端（frontend/）\n│   ├── components/\n│   │   ├── App.tsx\n│   │   └── ...\n│   ├── hooks/\n│   └── services/\n└── 后端（backend/）\n    ├── server/\n    └── core/\n```\n\n构建流程：\n1. **Phase 1**: LLM 分析所有文件，一次调用生成顶层模块\n2. **Phase 2**: 每个叶模块生成独立文档（并行）\n3. **Phase 3**: 父模块从子模块文档汇总（顺序）\n\n```typescript\nawait buildModuleTree();       // 一次 LLM 调用\nawait generateLeafPages();      // 叶模块并行\nawait generateParentPages();    // 父模块汇总\n```",
+        "en": "LLM-driven module tree: top-level grouping in one call, leaves in parallel, parents sequentially."
+      },
+      {
+        "lines": "200-300",
+        "type": "section",
+        "zh": "【增量更新机制】\n代码变更后只重新生成受影响的模块：\n\n```typescript\nconst changedFiles = await detectChangedFiles(repoPath, snapshot);\nconst affectedModules = findAffectedModules(changedFiles, tree);\nawait regenerateAffected(affectedModules);\n```\n\n流程：\n1. 对比当前文件与上次生成的快照\n2. 找出有变更的文件\n3. 找到这些文件所属的模块\n4. 只重新生成受影响的模块\n\n优势：\n- LLM 调用成本降低 90%+\n- 生成速度提升 10 倍\n- 不重复生成未变更内容",
+        "en": "Incremental updates detect changed files and regenerate only affected modules, reducing LLM costs by 90%+."
+      },
+      {
+        "lines": "400-500",
+        "type": "section",
+        "zh": "【并发与速率限制】\n并行生成模块时有过载保护：\n\n```typescript\nconst sem = new Semaphore(maxConcurrency); // 控制并发数\n\nfor (const module of modules) {\n  await sem.acquire();\n  generateModule(module).finally(() => sem.release());\n}\n```\n\n遇到 429（速率限制）时：\n```typescript\nif (error.status === 429) {\n  await sleep(1000 * retries);  // 指数退避\n  maxConcurrency = Math.max(1, maxConcurrency - 1); // 降低并发\n}\n```\n\n自适应策略：\n- 正常时并发度高（快速完成）\n- 遇到限流时自动降低并发\n- 不会完全停止（保留至少 1 个并发）",
+        "en": "Adaptive concurrency with semaphore and exponential backoff handles rate limits gracefully."
+      }
+    ]
+  },
+  {
+    "path": "src/cli/analyze.ts",
+    "tier": 3,
+    "description": "analyze 命令 — 完整仓库分析入口，管理堆内存、进度条、信号处理、最终摘要输出。",
+    "annotations": [
+      {
+        "lines": "1-50",
+        "type": "section",
+        "zh": "【8GB 堆内存保证】\n分析命令需要大量内存（Tree-sitter AST + LadybugDB），通过 `ensureHeap()` 检查当前进程堆大小：\n\n```typescript\nif (!hasEnoughHeap()) {\n  console.log('Restarting with 8GB heap...');\n  const newArgv = [...process.argv, '--max-old-space-size=8192'];\n  process.exit(cp.spawnSync(process.argv[0], newArgv, { stdio: 'inherit' }).status || 1);\n}\n```\n\n为什么只有 analyze 需要 8GB？\n- CLI 主进程只需要几百 MB\n- `serve` 和 `mcp` 命令不需要 fork 子进程\n- 只有子进程需要大量内存",
+        "en": "Re-executes with 8GB heap limit only for analyze command, not for serve/mcp commands."
+      },
+      {
+        "lines": "50-150",
+        "type": "section",
+        "zh": "【进度条设计】\n`bar.log()` 路由所有输出到进度条区域，防止日志和进度条相互覆盖：\n\n```typescript\n// 将 console.log 重定向到 bar.log()\n// 所有模块的日志都显示在同一区域\nbar.log('Phase 3/8: Parsing files...');\nbar.log(`  Files: ${stats.fileCount}`);\n```\n\n为什么需要路由？\n- 多模块同时输出日志\n- 直接 console.log 会和进度条混在一起\n- `bar.log()` 确保日志在进度条下方显示",
+        "en": "All output is routed through bar.log() to prevent progress bar corruption from concurrent module logs."
+      },
+      {
+        "lines": "150-250",
+        "type": "section",
+        "zh": "【信号处理】\n捕获 SIGINT（Ctrl+C）实现优雅关闭：\n\n```typescript\nprocess.on('SIGINT', () => {\n  bar.log('\\nReceived SIGINT, shutting down...');\n  // 清理临时文件、关闭数据库连接\n  cleanup();\n  process.exit(130);  // 128 + SIGINT(2)\n});\n```\n\n设计意图：\n- 用户按 Ctrl+C 时不要留下不完整的索引\n- 清理临时文件（中间 CSV、分析缓存）\n- 正确退出码（130）让调用方知道是用户中断",
+        "en": "SIGINT handler cleans up partial index data on Ctrl+C, exiting with code 130."
+      }
+    ]
+  },
+  {
+    "path": "src/cli/serve.ts",
+    "tier": 3,
+    "description": "serve 命令 — 启动 HTTP API 服务器（port 4747），是前端浏览器的后端连接目标。",
+    "annotations": [
+      {
+        "lines": "1-50",
+        "type": "section",
+        "zh": "【薄封装设计】\nserve 命令是 `createServer()` 的薄封装：\n\n```typescript\nexport async function createServer(port = 4747, host = '127.0.0.1') {\n  const app = express();\n  // ... register routes\n  return app.listen(port, host);\n}\n```\n\n```typescript\n// serve.ts\ncreateServer(port, host).catch(console.error);\n```\n\n设计意图：\n- API 服务器逻辑全部在 `api.ts`\n- serve.ts 只负责入口参数解析\n- 方便其他模块（如 analyze）直接调用 `createServer()`",
+        "en": "Thin wrapper delegates to createServer() — allows other modules to embed the HTTP server directly."
+      },
+      {
+        "lines": "50-100",
+        "type": "section",
+        "zh": "【默认绑定 127.0.0.1】\n服务器默认只监听本地回环地址：\n\n```typescript\nconst host = '127.0.0.1';  // 仅本机访问\n```\n\n安全考量：\n- API 服务器读写本地 `.ccinsight/` 数据库\n- 不应该暴露到公网\n- 用户需要远程访问时用 `--host 0.0.0.0` 显式开启\n\n```bash\nccinsight serve --host 0.0.0.0  # 监听所有网卡（谨慎使用）\n```",
+        "en": "Binds to 127.0.0.1 by default for security. Use --host to expose to other machines."
+      }
+    ]
+  },
+  {
+    "path": "src/cli/setup.ts",
+    "tier": 3,
+    "description": "setup 命令 — 为 Cursor/Claude Code/OpenCode/Codex 配置 MCP 连接，写入 JSON 配置文件。",
+    "annotations": [
+      {
+        "lines": "1-50",
+        "type": "section",
+        "zh": "【多编辑器检测】\nsetup 命令自动检测系统中安装的 AI 编辑器：\n\n```typescript\nconst detected = [];\nif (await isCursorInstalled()) detected.push('cursor');\nif (await isClaudeCodeInstalled()) detected.push('claude-code');\nif (await isOpenCodeInstalled()) detected.push('opencode');\n```\n\n每种编辑器有自己的配置方式：\n- **Cursor**: `~/.cursor/mcp.json`\n- **Claude Code**: `~/.claude.json` + hooks 目录\n- **OpenCode**: `~/.config/opencode/config.json`\n- **Codex**: `~/.codex/config.toml`",
+        "en": "Auto-detects installed AI editors and configures MCP connection for each."
+      },
+      {
+        "lines": "50-150",
+        "type": "section",
+        "zh": "【MCP Hooks 注入】\nClaude Code 支持 PreToolUse 和 PostToolUse hooks：\n\n```typescript\n// PreToolUse: 在 git commit 前运行 ccinsight augment\n// PostToolUse: 在 git merge 后自动重新分析\nconst hooks = {\n  preToolUse: [\n    { hook: 'BeforeAnyCommand', command: 'ccinsight aug' }\n  ],\n  postToolUse: [\n    { hook: 'AfterGitOperation', command: 'ccinsight analyze' }\n  ]\n};\n```\n\n效果：\n- `git commit` 时自动丰富提交信息\n- `git merge` 后自动更新索引\n- 无需手动触发",
+        "en": "Claude Code hooks automatically trigger ccinsight analyze after git operations."
+      },
+      {
+        "lines": "150-250",
+        "type": "section",
+        "zh": "【会话启动钩子限制】\nSessionStart hook 在 Windows 上有已知问题：\n\n```typescript\nif (isWindows && hasSessionStartHook) {\n  result.warnings.push(\n    'SessionStart hook is not supported on Windows (Claude Code bug #23576)'\n  );\n}\n```\n\n问题原因：\n- Claude Code 在 Windows 上的会话初始化时序问题\n- SessionStart hook 可能在 repo 未完全加载时触发\n- CCInsight 检测到这个问题后跳过该 hook",
+        "en": "SessionStart hook skipped on Windows due to Claude Code bug #23576."
+      }
+    ]
+  },
+  {
+    "path": "src/cli/tool.ts",
+    "tier": 3,
+    "description": "tool 子命令 — 直接调用图谱工具，跳过 MCP，零开销的命令行工具。",
+    "annotations": [
+      {
+        "lines": "1-50",
+        "type": "section",
+        "zh": "【跳过 MCP 直接调用】\ntool 命令绕过 MCP JSON-RPC 协议，直接调用 `LocalBackend`：\n\n```typescript\n// MCP 方式（慢）：\n// $ cursor \"用 ccinsight 查认证流程\"\n// → 启动 MCP 子进程 → JSON-RPC → JSON 解析\n\n// 直接方式（快）：\n// $ ccinsight query \"认证流程\"\n// → 直接调用 LocalBackend → Cypher 查询\n```\n\n性能差距：\n- MCP: ~200-500ms 进程启动 + JSON-RPC 开销\n- 直接: ~5-10ms 函数调用\n\n适用场景：\n- 快速调试和脚本\n- CI/CD 集成\n- 不需要 AI 推理只需要图谱查询",
+        "en": "Direct LocalBackend invocation is ~20-50x faster than MCP by eliminating JSON-RPC process overhead."
+      },
+      {
+        "lines": "50-150",
+        "type": "section",
+        "zh": "【输出绕过 stdout 捕获】\nLadybugDB 模块会捕获 `process.stdout` 用于内部日志。tool 命令用 `fs.writeSync(1, ...)` 绕过：\n\n```typescript\n// 绕过任何 stdout 拦截\nfs.writeSync(1, JSON.stringify(result) + '\\n');\n```\n\n为什么需要绕过？\n- LadybugDB 在查询时会写入 stdout\n- `console.log` 的输出会被混入 LadybugDB 的日志\n- `writeSync(1, ...)` 直接写到操作系统的 stdout fd\n- 确保结果纯净",
+        "en": "Direct fd write (writeSync to fd=1) bypasses LadybugDB's stdout capture for pure JSON output."
+      },
+      {
+        "lines": "150-250",
+        "type": "section",
+        "zh": "【EPIPE 优雅处理】\n当输出被管道到 `head` 等命令时，写入会触发 EPIPE 错误：\n\n```typescript\ntry {\n  fs.writeSync(1, result + '\\n');\n} catch (err) {\n  if (err.code === 'EPIPE') {\n    process.exit(0);  // 干净的退出\n  }\n  throw err;  // 其他错误继续抛出\n}\n```\n\n场景：\n```bash\nccinsight query \"认证\" | head -5\n```\n`head` 只读 5 行后关闭 stdin，CCInsight 继续写入会触发 EPIPE。处理方式是直接退出（exit 0），不是报错。",
+        "en": "EPIPE handling allows ccinsight to pipe into head/tail without erroring out."
+      }
+    ]
+  },
+  {
+    "path": "src/cli/wiki.ts",
+    "tier": 3,
+    "description": "wiki 命令 — 交互式生成架构文档，支持 OpenAI/OpenRouter/Azure/Cursor CLI 等多种 LLM 提供商。",
+    "annotations": [
+      {
+        "lines": "1-50",
+        "type": "section",
+        "zh": "【交互式 LLM 配置】\nwiki 命令引导用户选择 LLM 提供商：\n\n```typescript\nconsole.log('Select LLM provider:');\nconsole.log('1. OpenAI (api.openai.com)');\nconsole.log('2. OpenRouter (openrouter.ai)');\nconsole.log('3. Azure OpenAI');\nconsole.log('4. Custom endpoint');\nconsole.log('5. Cursor CLI (no API key needed)');\nconst choice = await prompt('Choice');\n```\n\n各选项特点：\n- **OpenAI**: GPT-4o，最通用\n- **OpenRouter**: 聚合多个模型，性价比高\n- **Azure**: 企业级，安全合规\n- **Custom**: 支持任何兼容 OpenAI API 的服务器\n- **Cursor CLI**: 免费，直接用 Cursor 的 API",
+        "en": "Interactive LLM provider selection guides users through OpenAI, OpenRouter, Azure, Custom, or Cursor CLI."
+      },
+      {
+        "lines": "50-150",
+        "type": "section",
+        "zh": "【GitHub Gist 发布】\n生成的文档可选发布到 GitHub Gist：\n\n```typescript\nasync function publishGist(files: WikiFiles) {\n  const body = JSON.stringify({\n    description: `${repoName} documentation`,\n    public: true,\n    files: files.reduce((acc, f) => ({ ...acc, [f.name]: { content: f.content } }), {})\n  });\n  return gh gist create --public -f manifest.json;\n}\n```\n\n为什么用 Gist 而不是 Repo？\n- 不需要用户授权创建仓库\n- Gist 是独立对象，删除 wiki 不污染仓库历史\n- 分享链接简短（`gist.github.com/{id}`）",
+        "en": "GitHub Gist publishing provides shareable links without requiring repository creation permissions."
+      }
+    ]
+  },
+  {
+    "path": "src/core/ingestion/call-routing.ts",
+    "tier": 4,
+    "description": "路由提取 — 从 AST 中提取 API 路由定义，构建 Route 节点和 HANDLES_ROUTE 边。",
+    "annotations": []
+  },
+  {
+    "path": "src/core/ingestion/community-processor.ts",
+    "tier": 4,
+    "description": "社区检测处理器 — 使用 Leiden 聚类算法将代码模块分组为功能社区。",
+    "annotations": []
+  },
+  {
+    "path": "src/core/ingestion/import-processor.ts",
+    "tier": 4,
+    "description": "导入处理器 — 解析 import/export 语句，构建模块依赖关系图。",
+    "annotations": []
+  },
+  {
+    "path": "src/core/ingestion/process-processor.ts",
+    "tier": 4,
+    "description": "执行流处理 — 从 AST 中提取调用链路，构建 Process 节点表示执行路径。",
+    "annotations": []
+  },
+  {
+    "path": "src/core/ingestion/structure-processor.ts",
+    "tier": 4,
+    "description": "结构提取器 — 从 Tree-sitter AST 中提取函数、类、变量等代码结构定义。",
+    "annotations": []
+  },
+  {
+    "path": "src/core/tree-sitter/parser-loader.ts",
+    "tier": 4,
+    "description": "Tree-sitter 解析器加载器 — 统一管理多语言解析器实例，支持按需加载和缓存。",
+    "annotations": []
+  },
+  {
+    "path": "src/lib/utils.ts",
+    "tier": 4,
+    "description": "通用工具函数 — 提供路径处理、JSON 操作、进程管理等通用能力。",
+    "annotations": []
+  },
+  {
+    "path": "src/storage/git.ts",
+    "tier": 4,
+    "description": "Git 工具 — 提供 diff、blame、log 等 Git 操作接口，供分析管道使用。",
+    "annotations": []
+  },
+  {
+    "path": "src/storage/repo-manager.ts",
+    "tier": 4,
+    "description": "仓库管理器 — 管理全局索引仓库注册表，处理仓库的增删改查。",
+    "annotations": []
+  }
+]
